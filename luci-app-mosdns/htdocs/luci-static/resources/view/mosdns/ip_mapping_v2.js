@@ -1,18 +1,18 @@
 'use strict';
 'require form';
 'require fs';
-'require mosdns/rulefile_draft as rulefile_draft';
+'require mosdns/rulefile_utils as rulefile_utils';
 'require uci';
 'require ui';
 'require view';
 
 function getMapFile(section_id) {
-	var sid = rulefile_draft.resolveSectionId('ip_map', section_id);
-	return rulefile_draft.getRuleRef('ip_map', sid, 'ip-map-' + sid + '.txt');
+	var sid = rulefile_utils.resolveSectionId('ip_map', section_id);
+	return rulefile_utils.getRuleRef('ip_map', sid, 'ip-map-' + sid + '.txt');
 }
 
 function readRuleFile(rule_file) {
-	return fs.trimmed(rulefile_draft.resolveRulePath(rule_file)).catch(function () { return ''; });
+	return fs.trimmed(rulefile_utils.resolveRulePath(rule_file)).catch(function () { return ''; });
 }
 
 function deleteMapFileIfUnusedByPath(p) {
@@ -20,7 +20,7 @@ function deleteMapFileIfUnusedByPath(p) {
 		return Promise.resolve();
 
 	var inUse = uci.sections('mosdns', 'ip_map').some(function (sec) {
-		return rulefile_draft.resolveRulePath(getMapFile(sec['.name'])) === p;
+		return rulefile_utils.resolveRulePath(getMapFile(sec['.name'])) === p;
 	});
 
 	if (inUse)
@@ -34,9 +34,9 @@ function normalizeName(v) {
 }
 
 function mapFileRefByName(section_id) {
-	var sid = rulefile_draft.resolveSectionId('ip_map', section_id);
+	var sid = rulefile_utils.resolveSectionId('ip_map', section_id);
 	var name = uci.get('mosdns', sid, 'name') || sid;
-	return rulefile_draft.buildVersionedRuleRef('rule-ip-map', name);
+	return rulefile_utils.buildVersionedRuleRef('rule-ip-map', name);
 }
 
 function flushAndRestartMosdns() {
@@ -148,8 +148,8 @@ return view.extend({
 			});
 		};
 		s.handleRemove = function (section_id, ev) {
-			var sid = rulefile_draft.resolveSectionId('ip_map', section_id);
-			var p = rulefile_draft.resolveRulePath(getMapFile(sid));
+			var sid = rulefile_utils.resolveSectionId('ip_map', section_id);
+			var p = rulefile_utils.resolveRulePath(getMapFile(sid));
 
 			return form.GridSection.prototype.handleRemove.apply(this, [ sid, ev ])
 				.then(function () {
@@ -166,7 +166,7 @@ return view.extend({
 		o.rmempty = false;
 		o.placeholder = _('IP Mapping');
 		o.validate = function (section_id, value) {
-			var sid = rulefile_draft.resolveSectionId('ip_map', section_id);
+			var sid = rulefile_utils.resolveSectionId('ip_map', section_id);
 			var n = normalizeName(value);
 			if (!n)
 				return _('Expecting: non-empty value');
@@ -187,7 +187,7 @@ return view.extend({
 		o.modalonly = true;
 		o.sortable = false;
 		o.textvalue = function (section_id) {
-			var sid = rulefile_draft.resolveSectionId('ip_map', section_id);
+			var sid = rulefile_utils.resolveSectionId('ip_map', section_id);
 			var v = uci.get('mosdns', sid, 'ip_map_target');
 			if (Array.isArray(v) && v.length)
 				return v.join(', ');
@@ -215,11 +215,11 @@ return view.extend({
 			if (formvalue == null)
 				return Promise.resolve();
 
-			var sid = rulefile_draft.resolveSectionId('ip_map', section_id);
+			var sid = rulefile_utils.resolveSectionId('ip_map', section_id);
 			var ref = mapFileRefByName(sid);
 			uci.set('mosdns', sid, 'rule_file', ref);
 
-			return rulefile_draft.writeRuleFile(ref, formvalue)
+			return rulefile_utils.writeRuleFile(ref, formvalue)
 				.catch(function (e) {
 					ui.addNotification(null, E('p', _('Unable to save contents: %s').format(e.message)));
 				});

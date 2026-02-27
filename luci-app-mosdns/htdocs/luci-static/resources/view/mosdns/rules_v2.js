@@ -1,7 +1,7 @@
 'use strict';
 'require form';
 'require fs';
-'require mosdns/rulefile_draft as rulefile_draft';
+'require mosdns/rulefile_utils as rulefile_utils';
 'require rpc';
 'require uci';
 'require ui';
@@ -185,11 +185,11 @@ var RULE_CONTENT_SAMPLES = {
 };
 
 function normalizeRuleContent(raw) {
-	return rulefile_draft.normalizeContent(raw);
+	return rulefile_utils.normalizeContent(raw);
 }
 
 function readRuleFile(rule_file) {
-	return fs.trimmed(rulefile_draft.resolveRulePath(rule_file)).catch(function () { return ''; });
+	return fs.trimmed(rulefile_utils.resolveRulePath(rule_file)).catch(function () { return ''; });
 }
 
 function normalizeName(v) {
@@ -201,7 +201,7 @@ function nextRuleFileRef(section_id) {
 	var mode = uci.get('mosdns', sid, 'mode') || 'custom';
 	var name = uci.get('mosdns', sid, 'name') || sid;
 	var prefix = (mode === 'ip_map') ? 'rule-ip-map' : 'rule-dns';
-	return rulefile_draft.buildVersionedRuleRef(prefix, name);
+	return rulefile_utils.buildVersionedRuleRef(prefix, name);
 }
 
 function getRuleTypeId(section_id) {
@@ -260,7 +260,7 @@ function ensureRuleSample(section_id) {
 	return readRuleFile(file).then(function (old) {
 		if (old && old.trim().length)
 			return;
-		return rulefile_draft.writeRuleFile(file, RULE_CONTENT_SAMPLES[key]);
+		return rulefile_utils.writeRuleFile(file, RULE_CONTENT_SAMPLES[key]);
 	}).catch(function () {
 		return;
 	});
@@ -441,9 +441,9 @@ function flushAndRestartMosdns() {
 function ensureRuleFile(section_id) {
 	section_id = resolveRuleSectionId(section_id);
 	if (!isRuleContentEditable(section_id))
-		return rulefile_draft.getRuleRef('rule', section_id, '');
+		return rulefile_utils.getRuleRef('rule', section_id, '');
 
-	return rulefile_draft.ensureRuleRef('rule', section_id, 'rule-' + section_id + '.txt');
+	return rulefile_utils.ensureRuleRef('rule', section_id, 'rule-' + section_id + '.txt');
 }
 
 function isRuleContentEditable(section_id) {
@@ -454,7 +454,7 @@ function isRuleContentEditable(section_id) {
 }
 
 function resolveRuleSectionId(section_id) {
-	return rulefile_draft.resolveSectionId('rule', section_id);
+	return rulefile_utils.resolveSectionId('rule', section_id);
 }
 
 function isRuleFileBacked(section_id) {
@@ -480,7 +480,7 @@ function deleteRuleFileIfUnusedByPath(p) {
 		if (!isRuleFileBacked(sec['.name']))
 			return false;
 
-		return rulefile_draft.resolveRulePath(uci.get('mosdns', sec['.name'], 'rule_file') || ensureRuleFile(sec['.name'])) === p;
+		return rulefile_utils.resolveRulePath(uci.get('mosdns', sec['.name'], 'rule_file') || ensureRuleFile(sec['.name'])) === p;
 	});
 
 	if (inUse)
@@ -625,7 +625,7 @@ return view.extend({
 			return form.GridSection.prototype.handleRemove.apply(this, [ sid, ev ])
 				.then(function () {
 					if (f)
-						return deleteRuleFileIfUnusedByPath(rulefile_draft.resolveRulePath(f));
+						return deleteRuleFileIfUnusedByPath(rulefile_utils.resolveRulePath(f));
 					return Promise.resolve();
 				});
 		};
@@ -904,7 +904,7 @@ return view.extend({
 			var ref = nextRuleFileRef(sid);
 			uci.set('mosdns', sid, 'rule_file', ref);
 
-			return rulefile_draft.writeRuleFile(ref, normalized)
+			return rulefile_utils.writeRuleFile(ref, normalized)
 				.catch(function (e) {
 					ui.addNotification(null, E('p', _('Unable to save contents: %s').format(e.message)));
 				});

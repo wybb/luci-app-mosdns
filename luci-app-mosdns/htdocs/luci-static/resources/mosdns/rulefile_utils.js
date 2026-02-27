@@ -106,64 +106,6 @@ function getRuleRef(sectionType, section_id, defaultRef) {
 	return normalizeRuleRefForSection(sectionType, sid, ref);
 }
 
-function draftPath(prefix, ruleRef) {
-	var key = resolveRulePath(normalizeRuleRef(ruleRef)).replace(/[^A-Za-z0-9_.-]/g, '_');
-	return '/tmp/mosdns-draft-' + prefix + '-' + key + '.txt';
-}
-
-function readDraftOrFile(prefix, ruleRef) {
-	var ref = normalizeRuleRef(ruleRef);
-	if (!ref)
-		return Promise.resolve('');
-
-	var draft = draftPath(prefix, ref);
-	var file = resolveRulePath(ref);
-
-	return fs.trimmed(draft).then(function (v) {
-		return String(v || '');
-	}).catch(function () {
-		return fs.trimmed(file).catch(function () { return ''; });
-	});
-}
-
-function writeDraft(prefix, ruleRef, content) {
-	var ref = normalizeRuleRef(ruleRef);
-	if (!ref)
-		return Promise.resolve();
-
-	return fs.write(draftPath(prefix, ref), normalizeContent(content) + '\n');
-}
-
-function clearDraft(prefix, ruleRef) {
-	var ref = normalizeRuleRef(ruleRef);
-	if (!ref)
-		return Promise.resolve();
-
-	return fs.remove(draftPath(prefix, ref)).catch(function () { return null; });
-}
-
-function applyDraft(prefix, ruleRef, clearAfterApply) {
-	var ref = normalizeRuleRef(ruleRef);
-	if (!ref)
-		return Promise.resolve();
-
-	var draft = draftPath(prefix, ref);
-	var file = resolveRulePath(ref);
-	var dir = parentDir(file);
-
-	return fs.trimmed(draft).then(function (content) {
-		return fs.exec('/bin/mkdir', [ '-p', dir ]).catch(function () { return null; }).then(function () {
-			return fs.write(file, normalizeContent(content) + '\n');
-		}).then(function () {
-			if (!clearAfterApply)
-				return null;
-			return clearDraft(prefix, ref);
-		});
-	}).catch(function () {
-		return null;
-	});
-}
-
 function writeRuleFile(ruleRef, content) {
 	var ref = normalizeRuleRef(ruleRef);
 	if (!ref)
@@ -188,10 +130,5 @@ return baseclass.extend({
 	buildVersionedRuleRef: buildVersionedRuleRef,
 	ensureRuleRef: ensureRuleRef,
 	getRuleRef: getRuleRef,
-	draftPath: draftPath,
-	readDraftOrFile: readDraftOrFile,
-	writeDraft: writeDraft,
-	clearDraft: clearDraft,
-	applyDraft: applyDraft,
 	writeRuleFile: writeRuleFile
 });

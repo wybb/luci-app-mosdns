@@ -7,7 +7,6 @@
 				"/etc/mosdns/config_custom.yaml": [ "read" ],
 				"/etc/mosdns/rule/*.txt": [ "read" ],
 				"/etc/mosdns/rule/rule-*": [ "read" ],
-				"/tmp/mosdns-draft-*.txt": [ "read" ],
 				"/usr/bin/mosdns": [ "exec" ],
 				"/usr/share/mosdns/mosdns.sh": [ "exec" ]
 			},
@@ -21,8 +20,7 @@
 			"file": {
 				"/etc/mosdns/config_custom.yaml": [ "write" ],
 				"/etc/mosdns/rule/*.txt": [ "write" ],
-				"/etc/mosdns/rule/rule-*": [ "write" ],
-				"/tmp/mosdns-draft-*.txt": [ "write" ]
+				"/etc/mosdns/rule/rule-*": [ "write" ]
 			},
 			"ubus": {
 				"file": [ "write" ]
