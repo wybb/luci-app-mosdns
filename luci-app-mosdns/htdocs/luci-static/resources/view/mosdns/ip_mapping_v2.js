@@ -1,36 +1,18 @@
 'use strict';
 'require form';
 'require fs';
+'require mosdns/rulefile_draft as rulefile_draft';
 'require uci';
 'require ui';
 'require view';
 
-function ensureMapFile(section_id) {
-	section_id = resolveSectionId(section_id);
-	var p = uci.get('mosdns', section_id, 'rule_file');
-	if (p)
-		return p;
-	p = '/etc/mosdns/rule/ip-map-' + section_id + '.txt';
-	uci.set('mosdns', section_id, 'rule_file', p);
-	return p;
-}
-
 function getMapFile(section_id) {
-	section_id = resolveSectionId(section_id);
-	return uci.get('mosdns', section_id, 'rule_file') || ('/etc/mosdns/rule/ip-map-' + section_id + '.txt');
+	var sid = rulefile_draft.resolveSectionId('ip_map', section_id);
+	return rulefile_draft.getRuleRef('ip_map', sid, 'ip-map-' + sid + '.txt');
 }
 
-function resolveSectionId(section_id) {
-	if (typeof section_id !== 'string')
-		return section_id;
-
-	if (section_id.indexOf('cbid.mosdns.') === 0) {
-		var parts = section_id.split('.');
-		if (parts.length >= 3)
-			return parts[2];
-	}
-
-	return section_id;
+function readRuleFile(rule_file) {
+	return fs.trimmed(rulefile_draft.resolveRulePath(rule_file)).catch(function () { return ''; });
 }
 
 function deleteMapFileIfUnusedByPath(p) {
@@ -38,13 +20,23 @@ function deleteMapFileIfUnusedByPath(p) {
 		return Promise.resolve();
 
 	var inUse = uci.sections('mosdns', 'ip_map').some(function (sec) {
-		return getMapFile(sec['.name']) === p;
+		return rulefile_draft.resolveRulePath(getMapFile(sec['.name'])) === p;
 	});
 
 	if (inUse)
 		return Promise.resolve();
 
 	return fs.remove(p).catch(function () { return null; });
+}
+
+function normalizeName(v) {
+	return String(v || '').trim().toLowerCase();
+}
+
+function mapFileRefByName(section_id) {
+	var sid = rulefile_draft.resolveSectionId('ip_map', section_id);
+	var name = uci.get('mosdns', sid, 'name') || sid;
+	return rulefile_draft.buildVersionedRuleRef('rule-ip-map', name);
 }
 
 function flushAndRestartMosdns() {
@@ -55,27 +47,45 @@ function flushAndRestartMosdns() {
 		});
 }
 
-function persistMapContentFiles() {
-	var tasks = [];
+function isModalVisible(modal) {
+	if (!modal)
+		return false;
 
-	uci.sections('mosdns', 'ip_map').forEach(function (sec) {
-		var sid = sec['.name'];
-		var content = uci.get('mosdns', sid, 'map_content');
+	var st = window.getComputedStyle(modal);
+	if (st.display === 'none' || st.visibility === 'hidden' || st.opacity === '0')
+		return false;
 
-		if (typeof content !== 'string')
+	var rect = modal.getBoundingClientRect();
+	if (!rect.width || !rect.height)
+		return false;
+
+	var dlg = modal.querySelector('.modal, .cbi-modal');
+	if (!dlg)
+		return false;
+
+	var ds = window.getComputedStyle(dlg);
+	return ds.display !== 'none' && ds.visibility !== 'hidden' && ds.opacity !== '0';
+}
+
+function ensureNoOpenModal() {
+	var modal = document.getElementById('modal_overlay');
+	if (!isModalVisible(modal))
+		return Promise.resolve();
+
+	var btn = modal.querySelector('button.cbi-button-save, button.cbi-button-apply, button.cbi-button-positive');
+	if (btn)
+		btn.click();
+
+	return new Promise(function (resolve) {
+		window.setTimeout(resolve, 500);
+	}).then(function () {
+		var m = document.getElementById('modal_overlay');
+		if (!isModalVisible(m))
 			return;
 
-		var p = ensureMapFile(sid);
-		tasks.push(
-			fs.exec('/bin/mkdir', [ '-p', '/etc/mosdns/rule' ])
-				.catch(function () { return null; })
-				.then(function () {
-					return fs.write(p, content.trim().replace(/\r\n/g, '\n') + '\n');
-				})
-		);
+		ui.addNotification(null, E('p', _('Please save or close the edit dialog first.')));
+		return Promise.reject(new Error('modal still open'));
 	});
-
-	return Promise.all(tasks);
 }
 
 return view.extend({
@@ -87,40 +97,26 @@ return view.extend({
 		if (!this.map)
 			return Promise.resolve();
 
-		return this.map.save(null, false)
-			.then(function () {
-				return uci.load('mosdns');
-			})
-			.then(function () {
-				return persistMapContentFiles();
-			});
+		return this.map.save(null, false);
 	},
 
 	handleSaveApply: function (ev) {
-		return this.handleSave(ev).then(function () {
-			return flushAndRestartMosdns();
-		}).then(function () {
+		return ensureNoOpenModal().then(L.bind(function () {
+			return this.handleSave(ev);
+		}, this)).then(function () {
 			return ui.changes.apply(false);
+		}).then(function () {
+			return flushAndRestartMosdns();
 		});
 	},
 
-	addFooter: function () {
-		return E('div', { 'class': 'cbi-page-actions' }, [
-			E('button', {
-				'class': 'cbi-button cbi-button-apply important',
-				'click': L.bind(this.handleSaveApply, this)
-			}, [ _('Save & Apply') ]),
-			' ',
-			E('button', {
-				'class': 'cbi-button cbi-button-save',
-				'click': L.bind(this.handleSave, this)
-			}, [ _('Save') ]),
-			' ',
-			E('button', {
-				'class': 'cbi-button cbi-button-reset',
-				'click': L.bind(this.handleReset, this)
-			}, [ _('Reset') ])
-		]);
+	handleReset: function () {
+		if (!this.map)
+			return Promise.resolve();
+
+		return this.map.reset().then(function () {
+			return uci.load('mosdns');
+		});
 	},
 
 	render: function () {
@@ -139,31 +135,25 @@ return view.extend({
 		s.nodescriptions = true;
 		s.modaltitle = _('IP Mapping Rule');
 		s.addbtntitle = _('Add IP Mapping Rule');
+		s.handleAdd = function (ev, name) {
+			return form.GridSection.prototype.handleAdd.apply(this, [ ev, name ]).then(function (rv) {
+				return new Promise(function (resolve) {
+					window.setTimeout(resolve, 120);
+				}).then(function () {
+					var btn = document.querySelector('#modal_overlay .cbi-button-add');
+					if (btn)
+						btn.click();
+					return rv;
+				});
+			});
+		};
 		s.handleRemove = function (section_id, ev) {
-			var sid = resolveSectionId(section_id);
-			var p = getMapFile(sid);
+			var sid = rulefile_draft.resolveSectionId('ip_map', section_id);
+			var p = rulefile_draft.resolveRulePath(getMapFile(sid));
 
 			return form.GridSection.prototype.handleRemove.apply(this, [ sid, ev ])
 				.then(function () {
 					return deleteMapFileIfUnusedByPath(p);
-				});
-		};
-		s.handleModalSave = function (modalMap, ev) {
-			var sid = resolveSectionId(modalMap && modalMap.section);
-			var textarea = document.querySelector('#modal_overlay .cbi-value[data-name="map_content"] textarea');
-			var content = textarea ? String(textarea.value || '') : null;
-
-			return form.GridSection.prototype.handleModalSave.apply(this, [ modalMap, ev ])
-				.then(function () {
-					if (content == null)
-						return Promise.resolve();
-
-					var p = ensureMapFile(sid);
-					return fs.exec('/bin/mkdir', [ '-p', '/etc/mosdns/rule' ])
-						.catch(function () { return null; })
-						.then(function () {
-							return fs.write(p, content.trim().replace(/\r\n/g, '\n') + '\n');
-						});
 				});
 		};
 
@@ -175,6 +165,20 @@ return view.extend({
 		o = s.option(form.Value, 'name', _('Rule Name'));
 		o.rmempty = false;
 		o.placeholder = _('IP Mapping');
+		o.validate = function (section_id, value) {
+			var sid = rulefile_draft.resolveSectionId('ip_map', section_id);
+			var n = normalizeName(value);
+			if (!n)
+				return _('Expecting: non-empty value');
+
+			var dup = uci.sections('mosdns', 'ip_map').some(function (sec) {
+				if (sec['.name'] === sid)
+					return false;
+				return normalizeName(sec.name) === n;
+			});
+
+			return dup ? _('A rule with this name already exists.') : true;
+		};
 		o.sortable = false;
 
 		o = s.option(form.DynamicList, 'ip_map_target', _('Mapped IP'));
@@ -183,7 +187,7 @@ return view.extend({
 		o.modalonly = true;
 		o.sortable = false;
 		o.textvalue = function (section_id) {
-			var sid = resolveSectionId(section_id);
+			var sid = rulefile_draft.resolveSectionId('ip_map', section_id);
 			var v = uci.get('mosdns', sid, 'ip_map_target');
 			if (Array.isArray(v) && v.length)
 				return v.join(', ');
@@ -200,12 +204,25 @@ return view.extend({
 		o.modalonly = true;
 		o.sortable = false;
 
-		o = s.option(form.TextValue, 'map_content', _('IP/CIDR List'));
+		o = s.option(form.TextValue, '_map_content', _('IP/CIDR List'));
 		o.rows = 16;
 		o.modalonly = true;
 		o.sortable = false;
 		o.cfgvalue = function (section_id) {
-			return fs.trimmed(ensureMapFile(section_id)).catch(function () { return ''; });
+			return readRuleFile(getMapFile(section_id));
+		};
+		o.write = function (section_id, formvalue) {
+			if (formvalue == null)
+				return Promise.resolve();
+
+			var sid = rulefile_draft.resolveSectionId('ip_map', section_id);
+			var ref = mapFileRefByName(sid);
+			uci.set('mosdns', sid, 'rule_file', ref);
+
+			return rulefile_draft.writeRuleFile(ref, formvalue)
+				.catch(function (e) {
+					ui.addNotification(null, E('p', _('Unable to save contents: %s').format(e.message)));
+				});
 		};
 
 		return m.render();

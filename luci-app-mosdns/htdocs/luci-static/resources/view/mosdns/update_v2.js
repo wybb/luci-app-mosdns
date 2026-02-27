@@ -28,25 +28,6 @@ return view.extend({
 		});
 	},
 
-	addFooter: function () {
-		return E('div', { 'class': 'cbi-page-actions' }, [
-			E('button', {
-				'class': 'cbi-button cbi-button-apply important',
-				'click': L.bind(this.handleSaveApply, this)
-			}, [ _('Save & Apply') ]),
-			' ',
-			E('button', {
-				'class': 'cbi-button cbi-button-save',
-				'click': L.bind(this.handleSave, this)
-			}, [ _('Save') ]),
-			' ',
-			E('button', {
-				'class': 'cbi-button cbi-button-reset',
-				'click': L.bind(this.handleReset, this)
-			}, [ _('Reset') ])
-		]);
-	},
-
 	handleUpdate: function (m, section_id, ev) {
 		return fs.exec('/usr/share/mosdns/mosdns.sh', ['geodata'])
 			.then(function (i) {

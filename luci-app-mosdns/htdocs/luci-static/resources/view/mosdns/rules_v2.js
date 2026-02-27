@@ -1,6 +1,7 @@
 'use strict';
 'require form';
 'require fs';
+'require mosdns/rulefile_draft as rulefile_draft';
 'require rpc';
 'require uci';
 'require ui';
@@ -183,7 +184,28 @@ var RULE_CONTENT_SAMPLES = {
 	].join('\n')
 };
 
+function normalizeRuleContent(raw) {
+	return rulefile_draft.normalizeContent(raw);
+}
+
+function readRuleFile(rule_file) {
+	return fs.trimmed(rulefile_draft.resolveRulePath(rule_file)).catch(function () { return ''; });
+}
+
+function normalizeName(v) {
+	return String(v || '').trim().toLowerCase();
+}
+
+function nextRuleFileRef(section_id) {
+	var sid = resolveRuleSectionId(section_id);
+	var mode = uci.get('mosdns', sid, 'mode') || 'custom';
+	var name = uci.get('mosdns', sid, 'name') || sid;
+	var prefix = (mode === 'ip_map') ? 'rule-ip-map' : 'rule-dns';
+	return rulefile_draft.buildVersionedRuleRef(prefix, name);
+}
+
 function getRuleTypeId(section_id) {
+	section_id = resolveRuleSectionId(section_id);
 	var mode = uci.get('mosdns', section_id, 'mode') || 'custom';
 	var bt = uci.get('mosdns', section_id, 'builtin_type') || '';
 	var blt = uci.get('mosdns', section_id, 'blacklist_type') || 'domain';
@@ -212,6 +234,7 @@ function ruleTypeLabel(section_id) {
 }
 
 function ensureRuleSample(section_id) {
+	section_id = resolveRuleSectionId(section_id);
 	var mode = uci.get('mosdns', section_id, 'mode') || 'custom';
 	var bt = uci.get('mosdns', section_id, 'blacklist_type') || 'domain';
 	var key = null;
@@ -234,10 +257,10 @@ function ensureRuleSample(section_id) {
 	if (!file)
 		return Promise.resolve();
 
-	return fs.trimmed(file).catch(function () { return ''; }).then(function (old) {
+	return readRuleFile(file).then(function (old) {
 		if (old && old.trim().length)
 			return;
-		return fs.write(file, RULE_CONTENT_SAMPLES[key] + '\n');
+		return rulefile_draft.writeRuleFile(file, RULE_CONTENT_SAMPLES[key]);
 	}).catch(function () {
 		return;
 	});
@@ -416,21 +439,54 @@ function flushAndRestartMosdns() {
 }
 
 function ensureRuleFile(section_id) {
+	section_id = resolveRuleSectionId(section_id);
 	if (!isRuleContentEditable(section_id))
-		return uci.get('mosdns', section_id, 'rule_file') || '';
+		return rulefile_draft.getRuleRef('rule', section_id, '');
 
-	var p = uci.get('mosdns', section_id, 'rule_file');
-	if (p)
-		return p;
-	p = '/etc/mosdns/rule/rule-' + section_id + '.txt';
-	uci.set('mosdns', section_id, 'rule_file', p);
-	return p;
+	return rulefile_draft.ensureRuleRef('rule', section_id, 'rule-' + section_id + '.txt');
 }
 
 function isRuleContentEditable(section_id) {
+	section_id = resolveRuleSectionId(section_id);
 	var mode = uci.get('mosdns', section_id, 'mode');
 	return mode === 'blacklist' || mode === 'ip_map' || mode === 'hosts' ||
 		mode === 'redirect' || mode === 'custom';
+}
+
+function resolveRuleSectionId(section_id) {
+	return rulefile_draft.resolveSectionId('rule', section_id);
+}
+
+function isRuleFileBacked(section_id) {
+	return isRuleContentEditable(section_id);
+}
+
+function getRuleFileForSection(section_id) {
+	section_id = resolveRuleSectionId(section_id);
+	if (!isRuleFileBacked(section_id))
+		return '';
+
+	return ensureRuleFile(section_id);
+}
+
+function deleteRuleFileIfUnusedByPath(p) {
+	if (!p)
+		return Promise.resolve();
+
+	if (p.indexOf('/etc/mosdns/rule/') !== 0)
+		return Promise.resolve();
+
+	var inUse = uci.sections('mosdns', 'rule').some(function (sec) {
+		if (!isRuleFileBacked(sec['.name']))
+			return false;
+
+		return rulefile_draft.resolveRulePath(uci.get('mosdns', sec['.name'], 'rule_file') || ensureRuleFile(sec['.name'])) === p;
+	});
+
+	if (inUse)
+		return Promise.resolve();
+
+	return fs.remove(p).catch(function () { return null; });
 }
 
 return view.extend({
@@ -451,32 +507,22 @@ return view.extend({
 		return logUiEvent('save_apply_click').then(L.bind(function () {
 			return this.handleSave(ev);
 		}, this)).then(function () {
-			return flushAndRestartMosdns();
-		}).then(function () {
 			return ui.changes.apply(false);
+		}).then(function () {
+			return flushAndRestartMosdns();
 		});
 	},
 
-	addFooter: function () {
-		return E('div', { 'class': 'cbi-page-actions' }, [
-			E('button', {
-				'class': 'cbi-button cbi-button-apply important',
-				'click': L.bind(this.handleSaveApply, this)
-			}, [ _('Save & Apply') ]),
-			' ',
-			E('button', {
-				'class': 'cbi-button cbi-button-save',
-				'click': L.bind(this.handleSave, this)
-			}, [ _('Save') ]),
-			' ',
-			E('button', {
-				'class': 'cbi-button cbi-button-reset',
-				'click': L.bind(this.handleReset, this)
-			}, [ _('Reset') ])
-		]);
+	handleReset: function () {
+		if (!this.map)
+			return Promise.resolve();
+
+		return this.map.reset().then(function () {
+			return uci.load('mosdns');
+		});
 	},
 
-		render: function () {
+	render: function () {
 		var m, s, o, a;
 		ensureRuleModalHiddenFieldsStyle();
 		var groups = uci.sections('mosdns', 'dns_group');
@@ -572,6 +618,17 @@ return view.extend({
 		s.modaltitle = _('Rule');
 		s.addbtntitle = _('Add Rule');
 		s.__newOrder = [];
+		s.handleRemove = function (section_id, ev) {
+			var sid = resolveRuleSectionId(section_id);
+			var f = getRuleFileForSection(sid);
+
+			return form.GridSection.prototype.handleRemove.apply(this, [ sid, ev ])
+				.then(function () {
+					if (f)
+						return deleteRuleFileIfUnusedByPath(rulefile_draft.resolveRulePath(f));
+					return Promise.resolve();
+				});
+		};
 		s.cfgsections = function () {
 			var ids = uci.sections('mosdns', 'rule')
 				.sort(function (a, b) {
@@ -691,6 +748,20 @@ return view.extend({
 		o = s.option(form.Value, 'name', _('Rule Name'));
 		o.rmempty = false;
 		o.placeholder = _('New Rule');
+		o.validate = function (section_id, value) {
+			var sid = resolveRuleSectionId(section_id);
+			var n = normalizeName(value);
+			if (!n)
+				return _('Expecting: non-empty value');
+
+			var dup = uci.sections('mosdns', 'rule').some(function (sec) {
+				if (sec['.name'] === sid)
+					return false;
+				return normalizeName(sec.name) === n;
+			});
+
+			return dup ? _('A rule with this name already exists.') : true;
+		};
 		o.sortable = false;
 
 		o = s.option(form.DummyValue, '_rule_type', _('Rule Type'));
@@ -819,33 +890,24 @@ return view.extend({
 		o.cfgvalue = function (section_id) {
 			if (!isRuleContentEditable(section_id))
 				return '';
-			return fs.trimmed(ensureRuleFile(section_id)).catch(function () { return ''; });
+			return readRuleFile(ensureRuleFile(section_id));
 		};
 		o.write = function (section_id, formvalue) {
-			if (!isRuleContentEditable(section_id))
+			if (!isRuleContentEditable(section_id) || formvalue == null)
 				return Promise.resolve();
-			var content = (formvalue || '').trim().replace(/\r\n/g, '\n');
-			if (uci.get('mosdns', section_id, 'mode') === 'hosts')
-				content = normalizeHostsContent(content);
 
-			return fs.write(ensureRuleFile(section_id), content + '\n')
+			var sid = resolveRuleSectionId(section_id);
+			var normalized = normalizeRuleContent(formvalue);
+			if (uci.get('mosdns', sid, 'mode') === 'hosts')
+				normalized = normalizeHostsContent(normalized);
+
+			var ref = nextRuleFileRef(sid);
+			uci.set('mosdns', sid, 'rule_file', ref);
+
+			return rulefile_draft.writeRuleFile(ref, normalized)
 				.catch(function (e) {
 					ui.addNotification(null, E('p', _('Unable to save contents: %s').format(e.message)));
 				});
-		};
-
-		o = s.option(form.Value, 'rule_file', _('Rule File'));
-		o.readonly = true;
-		o.rmempty = false;
-		o.modalonly = true;
-		o.sortable = false;
-		o.depends('mode', 'blacklist');
-		o.depends('mode', 'ip_map');
-		o.depends('mode', 'hosts');
-		o.depends('mode', 'redirect');
-		o.depends('mode', 'custom');
-		o.cfgvalue = function (section_id) {
-			return uci.get('mosdns', section_id, 'rule_file') || ensureRuleFile(section_id);
 		};
 
 		return m.render();
