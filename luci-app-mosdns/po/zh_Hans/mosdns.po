@@ -98,12 +98,6 @@ msgstr "启用 DNS 广告过滤"
 msgid "ADblock Source"
 msgstr "广告过滤规则来源"
 
-msgid "When using custom rule sources, please use rule types supported by MosDNS (domain lists)."
-msgstr "使用自定义规则来源时，请使用 MosDNS 支持的规则类型（域名列表）"
-
-msgid "Support for local files, such as: file:///var/mosdns/example.txt"
-msgstr "支持本地文件，例如：file:///var/mosdns/example.txt"
-
 msgid "Configuration Editor"
 msgstr "配置编辑器"
 
@@ -587,12 +581,6 @@ msgstr "国外域名"
 msgid "Apple Domain Optimization"
 msgstr "Apple 域名优化"
 
-msgid "When using custom rule sources, please use domain lists supported by MosDNS."
-msgstr "使用自定义规则来源时，请使用 MosDNS 支持的域名列表格式。"
-
-msgid "Support local files, e.g. file:///var/mosdns/example.txt"
-msgstr "支持本地文件，例如：file:///var/mosdns/example.txt"
-
 msgid "Mapped IP"
 msgstr "映射 IP"
 
@@ -758,6 +746,9 @@ msgstr "https://gh-proxy.com"
 msgid "Failed to create rule."
 msgstr "创建规则失败。"
 
+msgid "Failed to create IP mapping rule."
+msgstr "创建 IP 映射规则失败。"
+
 msgid "Cancel"
 msgstr "取消"
 
@@ -769,6 +760,15 @@ msgstr "规则类型"
 
 msgid "Select a rule type to create. Type cannot be changed later."
 msgstr "请选择要创建的规则类型。创建后不可修改类型。"
+
+msgid "Enter rule name."
+msgstr "请输入规则名称。"
+
+msgid "Expecting: non-empty value"
+msgstr "请输入非空内容"
+
+msgid "A rule with this name already exists."
+msgstr "已存在同名规则。"
 
 msgid "Filter advertisement domains using preset sources."
 msgstr "使用预设来源过滤广告域名。"
@@ -796,9 +796,6 @@ msgstr "拦截列表中的域名。"
 
 msgid "Map response IPs by CIDR/IP lists."
 msgstr "按 CIDR/IP 列表映射响应 IP。"
-
-msgid "Apply custom domain rules (plain/full/keyword/regexp)."
-msgstr "应用自定义域名规则（plain/full/keyword/regexp）。"
 
 msgid "Apply custom domain rules (plain/full/keyword/regexp). You can set TTL as needed."
 msgstr "应用自定义域名规则（plain/full/keyword/regexp），并可按需设置 TTL。"

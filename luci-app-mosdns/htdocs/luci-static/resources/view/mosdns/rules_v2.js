@@ -188,12 +188,33 @@ function normalizeRuleContent(raw) {
 	return rulefile_utils.normalizeContent(raw);
 }
 
+function commentizeSampleContent(raw) {
+	return String(raw || '').split('\n').map(function (line) {
+		var t = line.trim();
+		if (!t || t.charAt(0) === '#')
+			return line;
+		return '# ' + t;
+	}).join('\n');
+}
+
 function readRuleFile(rule_file) {
 	return fs.trimmed(rulefile_utils.resolveRulePath(rule_file)).catch(function () { return ''; });
 }
 
 function normalizeName(v) {
 	return String(v || '').trim().toLowerCase();
+}
+
+function isRuleNameTaken(name, excludeSid) {
+	var n = normalizeName(name);
+	if (!n)
+		return false;
+
+	return uci.sections('mosdns', 'rule').some(function (sec) {
+		if (excludeSid && sec['.name'] === excludeSid)
+			return false;
+		return normalizeName(sec.name) === n;
+	});
 }
 
 function nextRuleFileRef(section_id) {
@@ -260,65 +281,65 @@ function ensureRuleSample(section_id) {
 	return readRuleFile(file).then(function (old) {
 		if (old && old.trim().length)
 			return;
-		return rulefile_utils.writeRuleFile(file, RULE_CONTENT_SAMPLES[key]);
+		return rulefile_utils.writeRuleFile(file, commentizeSampleContent(RULE_CONTENT_SAMPLES[key]));
 	}).catch(function () {
 		return;
 	});
 }
 
-function createRuleByType(typeId, defaultGroup, cnGroup, globalGroup) {
+function createRuleByType(typeId, ruleName, defaultGroup, cnGroup, globalGroup) {
 	var sid = uci.add('mosdns', 'rule', 'rule_' + String(Date.now()));
-	var name = _('New Rule');
+	var name = String(ruleName || '').trim() || _('New Rule');
 
 	if (!sid)
 		return Promise.reject(new Error('failed to add uci rule section'));
 
-	uci.set('mosdns', sid, 'enabled', '1');
+	uci.set('mosdns', sid, 'enabled', '0');
 	uci.set('mosdns', sid, 'ip_strategy', 'auto');
 	uci.set('mosdns', sid, 'ttl', '0');
 
 	if (typeId === 'builtin_adblock') {
-		uci.set('mosdns', sid, 'name', _('ADBlock Rule'));
+		uci.set('mosdns', sid, 'name', name);
 		uci.set('mosdns', sid, 'mode', 'builtin');
 		uci.set('mosdns', sid, 'builtin_type', 'adblock');
 		uci.set('mosdns', sid, 'ad_source', 'geosite.dat');
 		uci.set('mosdns', sid, 'enabled', '0');
 	} else if (typeId === 'builtin_apple') {
-		uci.set('mosdns', sid, 'name', _('Apple Domain Optimization'));
+		uci.set('mosdns', sid, 'name', name);
 		uci.set('mosdns', sid, 'mode', 'builtin');
 		uci.set('mosdns', sid, 'builtin_type', 'apple_domain');
 		uci.set('mosdns', sid, 'dns_group', cnGroup || defaultGroup || '');
 		uci.set('mosdns', sid, 'rule_file', '/var/mosdns/geosite_apple.txt');
 		uci.set('mosdns', sid, 'enabled', '0');
 	} else if (typeId === 'builtin_cn') {
-		uci.set('mosdns', sid, 'name', _('China Domain'));
+		uci.set('mosdns', sid, 'name', name);
 		uci.set('mosdns', sid, 'mode', 'builtin');
 		uci.set('mosdns', sid, 'builtin_type', 'cn_domain');
 		uci.set('mosdns', sid, 'dns_group', cnGroup || defaultGroup || '');
 		uci.set('mosdns', sid, 'rule_file', '/var/mosdns/geosite_cn.txt');
 	} else if (typeId === 'builtin_global') {
-		uci.set('mosdns', sid, 'name', _('Global Domain'));
+		uci.set('mosdns', sid, 'name', name);
 		uci.set('mosdns', sid, 'mode', 'builtin');
 		uci.set('mosdns', sid, 'builtin_type', 'noncn_domain');
 		uci.set('mosdns', sid, 'dns_group', globalGroup || defaultGroup || '');
 		uci.set('mosdns', sid, 'ip_strategy', 'ipv4');
 		uci.set('mosdns', sid, 'rule_file', '/var/mosdns/geosite_geolocation-!cn.txt');
 	} else if (typeId === 'blacklist_domain') {
-		uci.set('mosdns', sid, 'name', _('Domain Blacklist'));
+		uci.set('mosdns', sid, 'name', name);
 		uci.set('mosdns', sid, 'mode', 'blacklist');
 		uci.set('mosdns', sid, 'blacklist_type', 'domain');
 		ensureRuleFile(sid);
 	} else if (typeId === 'blacklist_ptr') {
-		uci.set('mosdns', sid, 'name', _('PTR Blacklist'));
+		uci.set('mosdns', sid, 'name', name);
 		uci.set('mosdns', sid, 'mode', 'blacklist');
 		uci.set('mosdns', sid, 'blacklist_type', 'ptr');
 		ensureRuleFile(sid);
 	} else if (typeId === 'hosts') {
-		uci.set('mosdns', sid, 'name', _('HOSTS'));
+		uci.set('mosdns', sid, 'name', name);
 		uci.set('mosdns', sid, 'mode', 'hosts');
 		ensureRuleFile(sid);
 	} else if (typeId === 'redirect') {
-		uci.set('mosdns', sid, 'name', _('Redirect'));
+		uci.set('mosdns', sid, 'name', name);
 		uci.set('mosdns', sid, 'mode', 'redirect');
 		ensureRuleFile(sid);
 	} else {
@@ -342,37 +363,6 @@ function moveRuleToTop(section_id) {
 	});
 
 	return callUciOrder('mosdns', order);
-}
-
-function bindNewRuleModalCancel(section, section_id) {
-	window.setTimeout(function () {
-		var modal = document.getElementById('modal_overlay');
-		if (!modal)
-			return;
-
-		var committed = false;
-		var buttons = modal.querySelectorAll('button, .btn');
-
-		for (var i = 0; i < buttons.length; i++) {
-			buttons[i].addEventListener('click', function (ev) {
-				var cls = String((ev.currentTarget && ev.currentTarget.className) || '');
-				var txt = String((ev.currentTarget && (ev.currentTarget.textContent || ev.currentTarget.innerText)) || '').trim().toLowerCase();
-
-				if (cls.indexOf('cbi-button-save') >= 0 || cls.indexOf('cbi-button-apply') >= 0 || cls.indexOf('cbi-button-positive') >= 0 || txt === 'save' || txt === '保存')
-					committed = true;
-
-				if (cls.indexOf('cbi-button-reset') >= 0 || cls.indexOf('cbi-button-negative') >= 0 || txt === 'cancel' || txt === '取消' || txt === 'dismiss' || txt === 'close' || txt === '关闭') {
-					if (!committed) {
-						uci.remove('mosdns', section_id);
-						section.__newOrder = (section.__newOrder || []).filter(function (id) {
-							return id !== section_id;
-						});
-						window.setTimeout(function () { window.location.reload(); }, 0);
-					}
-				}
-			});
-		}
-	}, 120);
 }
 
 function isIpToken(s) {
@@ -617,31 +607,32 @@ return view.extend({
 		s.nodescriptions = true;
 		s.modaltitle = _('Rule');
 		s.addbtntitle = _('Add Rule');
-		s.__newOrder = [];
 		s.handleRemove = function (section_id, ev) {
-			var sid = resolveRuleSectionId(section_id);
-			var f = getRuleFileForSection(sid);
+			var self = this;
 
-			return form.GridSection.prototype.handleRemove.apply(this, [ sid, ev ])
+			return m.save(null, false)
+				.catch(function () { return null; })
 				.then(function () {
-					if (f)
-						return deleteRuleFileIfUnusedByPath(rulefile_utils.resolveRulePath(f));
-					return Promise.resolve();
+					return uci.load('mosdns');
+				})
+				.then(function () {
+					var sid = resolveRuleSectionId(section_id);
+					var f = getRuleFileForSection(sid);
+
+					return form.GridSection.prototype.handleRemove.apply(self, [ sid, ev ])
+						.then(function () {
+							if (f)
+								return deleteRuleFileIfUnusedByPath(rulefile_utils.resolveRulePath(f));
+							return Promise.resolve();
+						});
 				});
 		};
 		s.cfgsections = function () {
-			var ids = uci.sections('mosdns', 'rule')
+			return uci.sections('mosdns', 'rule')
 				.sort(function (a, b) {
 					return (a['.index'] || 0) - (b['.index'] || 0);
 				})
 				.map(function (sec) { return sec['.name']; });
-
-			(this.__newOrder || []).forEach(function (sid) {
-				if (ids.indexOf(sid) >= 0)
-					ids = [ sid ].concat(ids.filter(function (id) { return id !== sid; }));
-			});
-
-			return ids;
 		};
 		s.handleAdd = function (ev) {
 			if (ev)
@@ -667,13 +658,19 @@ return view.extend({
 				builtinChoices.forEach(function (it) {
 					optionNodes.push(E('option', { value: it.id }, [ RULE_TYPE_META[it.key].label ]));
 				});
-				optionNodes.push(E('option', { value: '__sep__', disabled: 'disabled' }, [ '────────' ]));
+				optionNodes.push(E('option', { value: '__sep__', disabled: 'disabled' }, [ '--------' ]));
 				otherChoices.forEach(function (it) {
 					optionNodes.push(E('option', { value: it.id }, [ RULE_TYPE_META[it.key].label ]));
 				});
 
 				var selector = E('select', { 'class': 'cbi-input-select' }, optionNodes);
+				var nameInput = E('input', {
+					'class': 'cbi-input-text',
+					'type': 'text',
+					'placeholder': _('New Rule')
+				});
 				var descBox = E('p', { 'style': 'margin-top:0.6em; opacity:.9' }, [ '' ]);
+				var errBox = E('p', { 'style': 'margin-top:0.4em; color:#b22222; display:none;' }, [ '' ]);
 
 				var updateDesc = function () {
 					var t = selector.value || 'custom';
@@ -686,8 +683,12 @@ return view.extend({
 				ui.showModal(_('Add Rule'), [
 					E('div', { 'class': 'cbi-section' }, [
 						E('p', _('Select a rule type to create. Type cannot be changed later.')),
+						E('p', _('Rule Name')),
+						nameInput,
+						E('p', { 'style': 'margin-top:0.6em;' }, _('Rule Type')),
 						selector,
-						descBox
+						descBox,
+						errBox
 					]),
 					E('div', { 'class': 'right' }, [
 						E('button', {
@@ -703,22 +704,34 @@ return view.extend({
 							'class': 'btn cbi-button cbi-button-add important',
 							'click': function (e) {
 								e.preventDefault();
-								var createdSid = null;
+								var inputName = String(nameInput.value || '').trim();
+								var row = choices.filter(function (x) { return x.id === (selector.value || 'custom'); })[0] || choices[choices.length - 1];
+								var defaultName = (RULE_TYPE_META[row.key] && RULE_TYPE_META[row.key].label) || _('New Rule');
+								var finalName = inputName || defaultName || _('New Rule');
 								var typeId = selector.value || 'custom';
+
+								errBox.style.display = 'none';
+								errBox.textContent = '';
 								if (typeId === '__sep__')
 									typeId = 'custom';
-								createRuleByType(typeId, defaultGroup, cnGroup, globalGroup).then(function (sid) {
-									createdSid = sid;
-									s.__newOrder = [ sid ].concat((s.__newOrder || []).filter(function (id) {
-										return id !== sid;
-									}));
-									return m.render();
+
+								if (!finalName.length) {
+									errBox.textContent = _('Expecting: non-empty value');
+									errBox.style.display = 'block';
+									return;
+								}
+
+								if (isRuleNameTaken(finalName)) {
+									errBox.textContent = _('A rule with this name already exists.');
+									errBox.style.display = 'block';
+									return;
+								}
+
+								createRuleByType(typeId, finalName, defaultGroup, cnGroup, globalGroup).then(function () {
+									return m.save(null, false);
 								}).then(function () {
 									ui.hideModal();
-									if (typeof s.renderMoreOptionsModal === 'function') {
-										s.renderMoreOptionsModal(createdSid);
-										bindNewRuleModalCancel(s, createdSid);
-									}
+									window.location.reload();
 									resolve();
 								}).catch(function (err) {
 									ui.addNotification(null, E('p', _('Failed to create rule.') + ' ' + (err && err.message ? err.message : '')), 'error');

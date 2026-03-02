@@ -33,6 +33,32 @@ function normalizeName(v) {
 	return String(v || '').trim().toLowerCase();
 }
 
+function isMapNameTaken(name, excludeSid) {
+	var n = normalizeName(name);
+	if (!n)
+		return false;
+
+	return uci.sections('mosdns', 'ip_map').some(function (sec) {
+		if (excludeSid && sec['.name'] === excludeSid)
+			return false;
+		return normalizeName(sec.name) === n;
+	});
+}
+
+function createIpMapRule(name) {
+	var sid = uci.add('mosdns', 'ip_map', 'ip_map_' + String(Date.now()));
+	var finalName = String(name || '').trim() || _('IP Mapping');
+
+	if (!sid)
+		return Promise.reject(new Error('failed to add uci ip_map section'));
+
+	uci.set('mosdns', sid, 'enabled', '0');
+	uci.set('mosdns', sid, 'name', finalName);
+	uci.set('mosdns', sid, 'continue_match', '1');
+
+	return Promise.resolve(sid);
+}
+
 function mapFileRefByName(section_id) {
 	var sid = rulefile_utils.resolveSectionId('ip_map', section_id);
 	var name = uci.get('mosdns', sid, 'name') || sid;
@@ -135,25 +161,88 @@ return view.extend({
 		s.nodescriptions = true;
 		s.modaltitle = _('IP Mapping Rule');
 		s.addbtntitle = _('Add IP Mapping Rule');
-		s.handleAdd = function (ev, name) {
-			return form.GridSection.prototype.handleAdd.apply(this, [ ev, name ]).then(function (rv) {
-				return new Promise(function (resolve) {
-					window.setTimeout(resolve, 120);
-				}).then(function () {
-					var btn = document.querySelector('#modal_overlay .cbi-button-add');
-					if (btn)
-						btn.click();
-					return rv;
+		s.cfgsections = function () {
+			return uci.sections('mosdns', 'ip_map')
+				.sort(function (a, b) {
+					return (a['.index'] || 0) - (b['.index'] || 0);
+				})
+				.map(function (sec) { return sec['.name']; });
+		};
+		s.handleAdd = function (ev) {
+			if (ev)
+				ev.preventDefault();
+
+			return new Promise(function (resolve) {
+				var nameInput = E('input', {
+					'class': 'cbi-input-text',
+					'type': 'text',
+					'placeholder': _('IP Mapping')
 				});
+				var errBox = E('p', { 'style': 'margin-top:0.4em; color:#b22222; display:none;' }, [ '' ]);
+
+				ui.showModal(_('Add IP Mapping Rule'), [
+					E('div', { 'class': 'cbi-section' }, [
+						E('p', _('Enter rule name.')),
+						nameInput,
+						errBox
+					]),
+					E('div', { 'class': 'right' }, [
+						E('button', {
+							'class': 'btn cbi-button cbi-button-reset',
+							'click': function (e) {
+								e.preventDefault();
+								ui.hideModal();
+								resolve();
+							}
+						}, [ _('Cancel') ]),
+						' ',
+						E('button', {
+							'class': 'btn cbi-button cbi-button-add important',
+							'click': function (e) {
+								e.preventDefault();
+								var finalName = String(nameInput.value || '').trim() || _('IP Mapping');
+
+								errBox.style.display = 'none';
+								errBox.textContent = '';
+
+								if (isMapNameTaken(finalName)) {
+									errBox.textContent = _('A rule with this name already exists.');
+									errBox.style.display = 'block';
+									return;
+								}
+
+								createIpMapRule(finalName).then(function () {
+									return m.save(null, false);
+								}).then(function () {
+									ui.hideModal();
+									window.location.reload();
+									resolve();
+								}).catch(function (err) {
+									ui.addNotification(null, E('p', _('Failed to create IP mapping rule.') + ' ' + (err && err.message ? err.message : '')), 'error');
+									resolve();
+								});
+							}
+						}, [ _('Add') ])
+					])
+				]);
 			});
 		};
 		s.handleRemove = function (section_id, ev) {
-			var sid = rulefile_utils.resolveSectionId('ip_map', section_id);
-			var p = rulefile_utils.resolveRulePath(getMapFile(sid));
+			var self = this;
 
-			return form.GridSection.prototype.handleRemove.apply(this, [ sid, ev ])
+			return m.save(null, false)
+				.catch(function () { return null; })
 				.then(function () {
-					return deleteMapFileIfUnusedByPath(p);
+					return uci.load('mosdns');
+				})
+				.then(function () {
+					var sid = rulefile_utils.resolveSectionId('ip_map', section_id);
+					var p = rulefile_utils.resolveRulePath(getMapFile(sid));
+
+					return form.GridSection.prototype.handleRemove.apply(self, [ sid, ev ])
+						.then(function () {
+							return deleteMapFileIfUnusedByPath(p);
+						});
 				});
 		};
 
