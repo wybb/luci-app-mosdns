@@ -2,9 +2,17 @@
 'require form';
 'require fs';
 'require mosdns/rulefile_utils as rulefile_utils';
+'require rpc';
 'require uci';
 'require ui';
 'require view';
+
+var callUciOrder = rpc.declare({
+	object: 'uci',
+	method: 'order',
+	params: [ 'config', 'sections' ],
+	expect: { '': 0 }
+});
 
 function getMapFile(section_id) {
 	var sid = rulefile_utils.resolveSectionId('ip_map', section_id);
@@ -57,6 +65,19 @@ function createIpMapRule(name) {
 	uci.set('mosdns', sid, 'continue_match', '1');
 
 	return Promise.resolve(sid);
+}
+
+function moveMapToTop(section_id) {
+	if (!section_id)
+		return Promise.resolve();
+
+	var order = [ section_id ];
+	uci.sections('mosdns', 'ip_map').forEach(function (sec) {
+		if (sec['.name'] !== section_id)
+			order.push(sec['.name']);
+	});
+
+	return callUciOrder('mosdns', order);
 }
 
 function mapFileRefByName(section_id) {
@@ -211,10 +232,13 @@ return view.extend({
 									return;
 								}
 
-								createIpMapRule(finalName).then(function () {
-									return m.save(null, false);
+								var createdSid = null;
+								createIpMapRule(finalName).then(function (sid) {
+									createdSid = sid;
+									return uci.save();
 								}).then(function () {
-									ui.hideModal();
+									return moveMapToTop(createdSid);
+								}).then(function () {
 									window.location.reload();
 									resolve();
 								}).catch(function (err) {

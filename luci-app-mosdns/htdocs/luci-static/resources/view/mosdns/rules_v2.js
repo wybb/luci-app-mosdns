@@ -727,10 +727,13 @@ return view.extend({
 									return;
 								}
 
-								createRuleByType(typeId, finalName, defaultGroup, cnGroup, globalGroup).then(function () {
-									return m.save(null, false);
+								var createdSid = null;
+								createRuleByType(typeId, finalName, defaultGroup, cnGroup, globalGroup).then(function (sid) {
+									createdSid = sid;
+									return uci.save();
 								}).then(function () {
-									ui.hideModal();
+									return moveRuleToTop(createdSid);
+								}).then(function () {
 									window.location.reload();
 									resolve();
 								}).catch(function (err) {
