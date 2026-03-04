@@ -546,21 +546,18 @@ return view.extend({
 			return [ 'config' ];
 		};
 
-		o = a.option(form.Button, '_restore_defaults', _('Restore Default Rules'));
-		o.inputtitle = _('Restore Default Rules');
-		o.inputstyle = 'remove';
-		o.onclick = function () {
-			if (!confirm(_('This operation will clear current rule settings and restore default DNS groups (CN/Global). Continue?')))
+		var runRestoreDefaults = function (command, confirmMessage) {
+			if (!confirm(confirmMessage))
 				return Promise.resolve();
 
-			return fs.exec('/usr/share/mosdns/mosdns.sh', ['restore_rule_defaults'])
+			return fs.exec('/usr/share/mosdns/mosdns.sh', [ command ])
 				.then(function (res) {
 					if (res.code !== 0) {
 						ui.addNotification(null, E('p', _('Failed to restore default rules.')), 'error');
 						return;
 					}
 
-					return fs.exec('/etc/init.d/mosdns', ['restart'])
+					return fs.exec('/etc/init.d/mosdns', [ 'restart' ])
 						.then(function () {
 							ui.addNotification(null, E('p', _('Default rules restored.')), 'info');
 							window.location.reload();
@@ -568,26 +565,30 @@ return view.extend({
 				});
 		};
 
-		o = a.option(form.Button, '_restore_rules_only', _('Restore Default Rules (Keep DNS Groups)'));
-		o.inputtitle = _('Restore Default Rules (Keep DNS Groups)');
-		o.inputstyle = 'remove';
-		o.onclick = function () {
-			if (!confirm(_('This operation will clear current rule settings only and keep current DNS groups. Continue?')))
-				return Promise.resolve();
-
-			return fs.exec('/usr/share/mosdns/mosdns.sh', ['restore_rule_defaults_keep_groups'])
-				.then(function (res) {
-					if (res.code !== 0) {
-						ui.addNotification(null, E('p', _('Failed to restore default rules.')), 'error');
-						return;
+		o = a.option(form.DummyValue, '_restore_defaults_actions', _('Restore Default Rules'));
+		o.renderWidget = function () {
+			return E('div', {
+				'style': 'display:flex; flex-wrap:wrap; gap:.5em;'
+			}, [
+				E('button', {
+					'class': 'btn cbi-button cbi-button-remove',
+					'type': 'button',
+					'click': function (ev) {
+						ev.preventDefault();
+						return runRestoreDefaults('restore_rule_defaults',
+							_('This operation will clear current rule settings and restore default DNS groups (CN/Global). Continue?'));
 					}
-
-					return fs.exec('/etc/init.d/mosdns', ['restart'])
-						.then(function () {
-							ui.addNotification(null, E('p', _('Default rules restored.')), 'info');
-							window.location.reload();
-						});
-				});
+				}, [ _('Restore Default Rules') ]),
+				E('button', {
+					'class': 'btn cbi-button cbi-button-remove',
+					'type': 'button',
+					'click': function (ev) {
+						ev.preventDefault();
+						return runRestoreDefaults('restore_rule_defaults_keep_groups',
+							_('This operation will clear current rule settings only and keep current DNS groups. Continue?'));
+					}
+				}, [ _('Restore Default Rules (Keep DNS Groups)') ])
+			]);
 		};
 
 		o = a.option(form.ListValue, 'fallback_ip_strategy', _('Fallback IP Strategy'),
