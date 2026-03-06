@@ -680,6 +680,12 @@ msgstr "默认 DNS 分组不可删除，请先将其他分组设为默认。"
 msgid "This DNS group is referenced by rules and cannot be deleted."
 msgstr "该 DNS 分组已被规则引用，无法删除。"
 
+msgid "An entry with this name already exists."
+msgstr "已存在同名条目。"
+
+msgid "Unable to locate newly created rule after save."
+msgstr "保存后无法定位新建规则。"
+
 msgid "Add IP Mapping Rule"
 msgstr "添加 IP 映射规则"
 

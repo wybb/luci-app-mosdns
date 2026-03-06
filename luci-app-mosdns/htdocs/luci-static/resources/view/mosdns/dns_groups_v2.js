@@ -107,6 +107,20 @@ return view.extend({
 		m = new form.Map('mosdns', _('DNS Groups'),
 			_('Manage upstream DNS groups. One group must be set as default fallback.'));
 		this.map = m;
+		m.render = L.bind(function () {
+			return form.Map.prototype.render.apply(m, arguments).then(function (node) {
+				node.appendChild(E('style', [
+					'#maincontent .cbi-section-table-row[data-title]::before { display: none !important; content: none !important; }',
+					'#maincontent .cbi-section-table-titles.named::before { display: none !important; content: none !important; }',
+					'#maincontent .cbi-section-table .cbi-section-table-row { display: table-row !important; }',
+					'#maincontent .cbi-section-table .cbi-section-table-titles { display: table-row !important; }',
+					'#maincontent .cbi-section-table .cbi-section-table-row > .td { display: table-cell !important; }',
+					'#maincontent .cbi-section-table .cbi-section-table-titles > .th { display: table-cell !important; }',
+					'#maincontent .cbi-section-table .cbi-section-table-row > .td[data-title]::before { display: none !important; content: none !important; }'
+				]));
+				return node;
+			});
+		}, this);
 
 		s = m.section(form.GridSection, 'dns_group', _('DNS Group List'));
 		s.anonymous = false;
@@ -122,20 +136,34 @@ return view.extend({
 				})
 				.map(function (sec) { return sec['.name']; });
 		};
+		s.renderSectionAdd = function (extra_class) {
+			var createEl = E('div', { 'class': 'cbi-section-create' });
+			var btnTitle = this.titleFn('addbtntitle') || _('Add');
+
+			if (extra_class != null)
+				createEl.classList.add(extra_class);
+
+			createEl.appendChild(E('button', {
+				'class': 'cbi-button cbi-button-add',
+				'title': btnTitle,
+				'click': ui.createHandlerFn(this, 'handleAdd'),
+				'disabled': this.map.readonly || null
+			}, [ btnTitle ]));
+
+			return createEl;
+		};
 		s.handleAdd = function (ev) {
-			if (ev)
-				ev.preventDefault();
+			var config_name = this.uciconfig || this.map.config;
+			var section_id = this.map.data.add(config_name, this.sectiontype, generateDnsGroupId());
+			var mapNode = this.getPreviousModalMap();
+			var prevMap = mapNode ? dom.findClassInstance(mapNode) : this.map;
 
-			var sid = generateDnsGroupId();
-			uci.add('mosdns', 'dns_group', sid);
-			uci.set('mosdns', sid, 'name', _('DNS Group'));
-			uci.set('mosdns', sid, 'is_default', '0');
-			uci.set('mosdns', sid, 'use_default_dns', '0');
-			uci.set('mosdns', sid, 'dns', [ '8.8.8.8' ]);
+			prevMap.addedSection = section_id;
+			uci.set('mosdns', section_id, 'is_default', '0');
+			uci.set('mosdns', section_id, 'use_default_dns', '0');
+			uci.set('mosdns', section_id, 'dns', [ '8.8.8.8' ]);
 
-			return uci.save().then(function () {
-				window.location.reload();
-			});
+			return this.renderMoreOptionsModal(section_id);
 		};
 		s.handleRemove = function (section_id, ev) {
 			var groups = uci.sections('mosdns', 'dns_group');
