@@ -108,7 +108,7 @@ generate_dns_group_id() {
 	n=0
 
 	while :; do
-		candidate="dnsg_$(printf '%08x' $(( (RANDOM << 16) ^ RANDOM ^ n )) )"
+		candidate="dnsg_$(date +%s)_$n"
 		uci -q show mosdns.$candidate >/dev/null 2>&1 || {
 			echo "$candidate"
 			return 0

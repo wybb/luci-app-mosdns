@@ -239,7 +239,7 @@ function resolveDnsGroupRef(ref, groups, defaultGroup) {
 function shouldUseDnsGroup(mode, builtinType) {
 	return mode === 'custom' || (mode === 'builtin' &&
 		(builtinType === 'cn_domain' || builtinType === 'noncn_domain' ||
-			builtinType === 'apple_domain' || builtinType === 'stream_media'));
+			builtinType === 'apple_domain'));
 }
 
 function normalizeAllRuleDnsGroupRefs(groups, defaultGroup) {
@@ -906,7 +906,11 @@ return view.extend({
 		o.sortable = false;
 
 		o = s.option(form.DummyValue, '_dns_group_text', _('DNS Group'));
-		o.textvalue = function (section_id) {
+		o.depends('mode', 'custom');
+		o.depends({ mode: 'builtin', builtin_type: 'cn_domain' });
+		o.depends({ mode: 'builtin', builtin_type: 'noncn_domain' });
+		o.depends({ mode: 'builtin', builtin_type: 'apple_domain' });
+		o.cfgvalue = function (section_id) {
 			var mode = uci.get('mosdns', section_id, 'mode');
 			var bt = uci.get('mosdns', section_id, 'builtin_type');
 			if (!shouldUseDnsGroup(mode, bt))
