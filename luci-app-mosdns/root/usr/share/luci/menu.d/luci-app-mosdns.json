@@ -34,6 +34,14 @@
 			"path": "mosdns/rules_v2"
 		}
 	},
+	"admin/services/mosdns/rules_ui_test": {
+		"title": "Rules UI Test",
+		"order": 16.5,
+		"action": {
+			"type": "view",
+			"path": "mosdns/rules_ui_test"
+		}
+	},
 	"admin/services/mosdns/ip_mapping": {
 		"title": "IP Mapping",
 		"order": 17,

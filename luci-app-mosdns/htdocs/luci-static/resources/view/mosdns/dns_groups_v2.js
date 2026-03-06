@@ -5,6 +5,8 @@
 'require ui';
 'require view';
 
+var DUPLICATE_NAME_MSG = _('An entry with this name already exists.');
+
 function ruleUsesDnsGroup(rule, targetGroup, groups) {
 	var mode = rule.mode || 'custom';
 	var bt = rule.builtin_type || '';
@@ -27,16 +29,48 @@ function ruleUsesDnsGroup(rule, targetGroup, groups) {
 	return !!(groups[idx] && groups[idx]['.name'] === targetGroup);
 }
 
-function resolveGroupName(section_id, groups) {
-	if (!section_id)
+function normalizeName(v) {
+	return String(v || '').trim().toLowerCase();
+}
+
+function isGroupNameTaken(name, excludeSid) {
+	var n = normalizeName(name);
+	if (!n)
+		return false;
+
+	return uci.sections('mosdns', 'dns_group').some(function (sec) {
+		if (excludeSid && sec['.name'] === excludeSid)
+			return false;
+		return normalizeName(sec.name) === n;
+	});
+}
+
+function resolveGroupId(ref, groups) {
+	if (!ref)
 		return null;
 
-	var m = /^@dns_group\[(\d+)\]$/.exec(section_id);
+	if (groups.some(function (g) { return g['.name'] === ref; }))
+		return ref;
+
+	var m = /^@dns_group\[(\d+)\]$/.exec(ref);
 	if (!m)
-		return section_id;
+		return null;
 
 	var idx = +m[1];
 	return groups[idx] ? groups[idx]['.name'] : null;
+}
+
+function generateDnsGroupId() {
+	return 'dnsg_' + Math.random().toString(16).slice(2, 10);
+}
+
+function resolveGroupName(section_id, groups) {
+	return resolveGroupId(section_id, groups);
+}
+
+function resolveGroupSectionId(section_id) {
+	var groups = uci.sections('mosdns', 'dns_group');
+	return resolveGroupId(section_id, groups) || section_id;
 }
 
 function flushAndRestartMosdns() {
@@ -75,15 +109,37 @@ return view.extend({
 		this.map = m;
 
 		s = m.section(form.GridSection, 'dns_group', _('DNS Group List'));
-		s.anonymous = true;
+		s.anonymous = false;
 		s.addremove = true;
 		s.sortable = false;
 		s.nodescriptions = true;
 		s.modaltitle = _('DNS Group');
 		s.addbtntitle = _('Add DNS Group');
+		s.cfgsections = function () {
+			return uci.sections('mosdns', 'dns_group')
+				.sort(function (a, b) {
+					return (a['.index'] || 0) - (b['.index'] || 0);
+				})
+				.map(function (sec) { return sec['.name']; });
+		};
+		s.handleAdd = function (ev) {
+			if (ev)
+				ev.preventDefault();
+
+			var sid = generateDnsGroupId();
+			uci.add('mosdns', 'dns_group', sid);
+			uci.set('mosdns', sid, 'name', _('DNS Group'));
+			uci.set('mosdns', sid, 'is_default', '0');
+			uci.set('mosdns', sid, 'use_default_dns', '0');
+			uci.set('mosdns', sid, 'dns', [ '8.8.8.8' ]);
+
+			return uci.save().then(function () {
+				window.location.reload();
+			});
+		};
 		s.handleRemove = function (section_id, ev) {
 			var groups = uci.sections('mosdns', 'dns_group');
-			var resolved = resolveGroupName(section_id, groups);
+			var resolved = resolveGroupId(section_id, groups);
 
 			if (!resolved)
 				return Promise.resolve();
@@ -108,6 +164,30 @@ return view.extend({
 		o = s.option(form.Value, 'name', _('Group Name'));
 		o.rmempty = false;
 		o.placeholder = _('DNS Group');
+		o.validate = function (section_id, value) {
+			var sid = resolveGroupSectionId(section_id);
+			var n = normalizeName(value);
+
+			if (!n)
+				return _('Expecting: non-empty value');
+
+			if (isGroupNameTaken(value, sid))
+				return DUPLICATE_NAME_MSG;
+
+			return true;
+		};
+		o.write = function (section_id, formvalue) {
+			var sid = resolveGroupSectionId(section_id);
+			var value = String(formvalue || '').trim();
+			var n = normalizeName(value);
+
+			if (!n)
+				throw new Error(_('Expecting: non-empty value'));
+			if (isGroupNameTaken(value, sid))
+				throw new Error(DUPLICATE_NAME_MSG);
+
+			uci.set('mosdns', sid, 'name', value);
+		};
 		o.sortable = false;
 
 		o = s.option(form.DynamicList, 'dns', _('DNS Servers'));

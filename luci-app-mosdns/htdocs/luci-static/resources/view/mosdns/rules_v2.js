@@ -184,6 +184,8 @@ var RULE_CONTENT_SAMPLES = {
 	].join('\n')
 };
 
+var DUPLICATE_NAME_MSG = _('An entry with this name already exists.');
+
 function normalizeRuleContent(raw) {
 	return rulefile_utils.normalizeContent(raw);
 }
@@ -214,6 +216,46 @@ function isRuleNameTaken(name, excludeSid) {
 		if (excludeSid && sec['.name'] === excludeSid)
 			return false;
 		return normalizeName(sec.name) === n;
+	});
+}
+
+function resolveDnsGroupRef(ref, groups, defaultGroup) {
+	if (!ref)
+		return '';
+
+	var m = /^@dns_group\[(\d+)\]$/.exec(ref);
+	if (m) {
+		var idx = +m[1];
+		return (groups[idx] && groups[idx]['.name']) || defaultGroup || '';
+	}
+
+	var exists = groups.some(function (g) {
+		return g['.name'] === ref;
+	});
+
+	return exists ? ref : (defaultGroup || '');
+}
+
+function shouldUseDnsGroup(mode, builtinType) {
+	return mode === 'custom' || (mode === 'builtin' &&
+		(builtinType === 'cn_domain' || builtinType === 'noncn_domain' ||
+			builtinType === 'apple_domain' || builtinType === 'stream_media'));
+}
+
+function normalizeAllRuleDnsGroupRefs(groups, defaultGroup) {
+	uci.sections('mosdns', 'rule').forEach(function (sec) {
+		var mode = sec.mode || 'custom';
+		var builtinType = sec.builtin_type || '';
+
+		if (!shouldUseDnsGroup(mode, builtinType))
+			return;
+
+		var resolved = resolveDnsGroupRef(sec.dns_group, groups, defaultGroup);
+
+		if (resolved)
+			uci.set('mosdns', sec['.name'], 'dns_group', resolved);
+		else
+			uci.unset('mosdns', sec['.name'], 'dns_group');
 	});
 }
 
@@ -363,6 +405,18 @@ function moveRuleToTop(section_id) {
 	});
 
 	return callUciOrder('mosdns', order);
+}
+
+function findRuleSectionIdByName(name) {
+	var wanted = normalizeName(name);
+	if (!wanted)
+		return '';
+
+	var matched = uci.sections('mosdns', 'rule').filter(function (sec) {
+		return normalizeName(sec.name) === wanted;
+	});
+
+	return matched.length ? matched[0]['.name'] : '';
 }
 
 function isIpToken(s) {
@@ -535,6 +589,8 @@ return view.extend({
 		if (!defaultGroup && groups.length)
 			defaultGroup = groups[0]['.name'];
 
+		normalizeAllRuleDnsGroupRefs(groups, defaultGroup);
+
 		m = new form.Map('mosdns', _('Rule Settings'),
 			_('Rules are matched from top to bottom. If no rule matches, the default DNS group is used as fallback.'));
 		this.map = m;
@@ -610,6 +666,8 @@ return view.extend({
 		s.addbtntitle = _('Add Rule');
 		s.handleRemove = function (section_id, ev) {
 			var self = this;
+			var originalSid = resolveRuleSectionId(section_id);
+			var ruleName = uci.get('mosdns', originalSid, 'name') || '';
 
 			return m.save(null, false)
 				.catch(function () { return null; })
@@ -617,7 +675,7 @@ return view.extend({
 					return uci.load('mosdns');
 				})
 				.then(function () {
-					var sid = resolveRuleSectionId(section_id);
+					var sid = findRuleSectionIdByName(ruleName) || resolveRuleSectionId(section_id);
 					var f = getRuleFileForSection(sid);
 
 					return form.GridSection.prototype.handleRemove.apply(self, [ sid, ev ])
@@ -728,12 +786,15 @@ return view.extend({
 									return;
 								}
 
-								var createdSid = null;
-								createRuleByType(typeId, finalName, defaultGroup, cnGroup, globalGroup).then(function (sid) {
-									createdSid = sid;
+								createRuleByType(typeId, finalName, defaultGroup, cnGroup, globalGroup).then(function () {
 									return uci.save();
 								}).then(function () {
-									return moveRuleToTop(createdSid);
+									return uci.load('mosdns');
+								}).then(function () {
+									var actualSid = findRuleSectionIdByName(finalName);
+									if (!actualSid)
+										throw new Error(_('Unable to locate newly created rule after save.'));
+									return moveRuleToTop(actualSid);
 								}).then(function () {
 									window.location.reload();
 									resolve();
@@ -777,7 +838,7 @@ return view.extend({
 				return normalizeName(sec.name) === n;
 			});
 
-			return dup ? _('A rule with this name already exists.') : true;
+			return dup ? DUPLICATE_NAME_MSG : true;
 		};
 		o.sortable = false;
 
@@ -844,6 +905,21 @@ return view.extend({
 		o.modalonly = true;
 		o.sortable = false;
 
+		o = s.option(form.DummyValue, '_dns_group_text', _('DNS Group'));
+		o.textvalue = function (section_id) {
+			var mode = uci.get('mosdns', section_id, 'mode');
+			var bt = uci.get('mosdns', section_id, 'builtin_type');
+			if (!shouldUseDnsGroup(mode, bt))
+				return '-';
+
+			var v = resolveDnsGroupRef(uci.get('mosdns', section_id, 'dns_group'), groups, defaultGroup);
+			if (!v)
+				return _('Default DNS Group');
+
+			return groupNameMap[v] || _('Default DNS Group');
+		};
+		o.sortable = false;
+
 		o = s.option(form.ListValue, 'dns_group', _('DNS Group'));
 		groups.forEach(function (g) {
 			var label = g.name || g['.name'];
@@ -851,23 +927,20 @@ return view.extend({
 		});
 		if (defaultGroup)
 			o.default = defaultGroup;
-		o.textvalue = function (section_id) {
-			var mode = uci.get('mosdns', section_id, 'mode');
-			var bt = uci.get('mosdns', section_id, 'builtin_type');
-			if (mode !== 'custom' && !(mode === 'builtin' && (bt === 'cn_domain' || bt === 'noncn_domain' || bt === 'apple_domain')))
-				return '-';
-
-			var v = uci.get('mosdns', section_id, 'dns_group');
-			if (!v)
-				return _('Default DNS Group');
-
-			var m = /^@dns_group\[(\d+)\]$/.exec(v || '');
-			if (m) {
-				var idx = +m[1];
-				return (groups[idx] && (groups[idx].name || groups[idx]['.name'])) || _('Default DNS Group');
-			}
-			return groupNameMap[v] || _('Default DNS Group');
+		o.cfgvalue = function (section_id) {
+			var sid = resolveRuleSectionId(section_id);
+			return resolveDnsGroupRef(uci.get('mosdns', sid, 'dns_group'), groups, defaultGroup);
 		};
+		o.write = function (section_id, formvalue) {
+			var sid = resolveRuleSectionId(section_id);
+			var resolved = resolveDnsGroupRef(formvalue, groups, defaultGroup);
+
+			if (resolved)
+				uci.set('mosdns', sid, 'dns_group', resolved);
+			else
+				uci.unset('mosdns', sid, 'dns_group');
+		};
+		o.modalonly = true;
 		o.depends('mode', 'custom');
 		o.depends({ mode: 'builtin', builtin_type: 'cn_domain' });
 		o.depends({ mode: 'builtin', builtin_type: 'noncn_domain' });

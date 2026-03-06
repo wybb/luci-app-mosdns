@@ -181,6 +181,20 @@ set_default_dns_group() {
     uci -q commit mosdns
 }
 
+generate_dns_group_id() {
+    local candidate n
+    n=0
+
+    while :; do
+        candidate="dnsg_$(printf '%08x' $(( (RANDOM << 16) ^ RANDOM ^ n )) )"
+        uci -q show mosdns.$candidate >/dev/null 2>&1 || {
+            echo "$candidate"
+            return 0
+        }
+        n=$((n + 1))
+    done
+}
+
 restore_default_rule_files() {
     rm -rf /etc/mosdns/rule
     mkdir -p /etc/mosdns/rule
@@ -226,13 +240,15 @@ restore_rule_defaults() {
     uci -q add_list mosdns.config.ad_source='geosite.dat'
     restore_default_rule_files
 
-    cn_id=$(uci -q add mosdns dns_group)
+    cn_id=$(generate_dns_group_id)
+    uci -q set mosdns.$cn_id=dns_group
     uci -q set mosdns.$cn_id.name='国内'
     uci -q set mosdns.$cn_id.is_default='0'
     uci -q set mosdns.$cn_id.use_default_dns='0'
     uci -q add_list mosdns.$cn_id.dns='223.5.5.5'
 
-    global_id=$(uci -q add mosdns dns_group)
+    global_id=$(generate_dns_group_id)
+    uci -q set mosdns.$global_id=dns_group
     uci -q set mosdns.$global_id.name='国外'
     uci -q set mosdns.$global_id.is_default='1'
     uci -q set mosdns.$global_id.use_default_dns='0'

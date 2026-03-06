@@ -14,6 +14,8 @@ var callUciOrder = rpc.declare({
 	expect: { '': 0 }
 });
 
+var DUPLICATE_NAME_MSG = _('An entry with this name already exists.');
+
 function getMapFile(section_id) {
 	var sid = rulefile_utils.resolveSectionId('ip_map', section_id);
 	return rulefile_utils.getRuleRef('ip_map', sid, 'ip-map-' + sid + '.txt');
@@ -290,7 +292,7 @@ return view.extend({
 				return normalizeName(sec.name) === n;
 			});
 
-			return dup ? _('A rule with this name already exists.') : true;
+			return dup ? DUPLICATE_NAME_MSG : true;
 		};
 		o.sortable = false;
 

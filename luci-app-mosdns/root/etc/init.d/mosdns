@@ -72,6 +72,98 @@ get_dns_group_tag() {
 	eval "echo \${DNS_GROUP_TAG_${key}}"
 }
 
+resolve_dns_group_section() {
+	local ref="$1"
+	local idx
+
+	case "$ref" in
+		@dns_group\[*\])
+			idx=$(echo "$ref" | sed -n 's/^@dns_group\[\([0-9][0-9]*\)\]$/\1/p')
+			[ -n "$idx" ] && uci -q show mosdns.@dns_group[$idx] | awk -F '[.=]' 'NR==1{print $2}'
+		;;
+		*)
+			echo "$ref"
+		;;
+	esac
+}
+
+build_dns_group_ref() {
+	local target="$1"
+	local idx=0
+	local sec
+
+	for sec in $(uci -q show mosdns | awk -F '[.=]' '/=dns_group$/{print $2}'); do
+		if [ "$sec" = "$target" ]; then
+			echo "@dns_group[$idx]"
+			return 0
+		fi
+		idx=$((idx + 1))
+	done
+
+	return 1
+}
+
+generate_dns_group_id() {
+	local candidate n
+	n=0
+
+	while :; do
+		candidate="dnsg_$(printf '%08x' $(( (RANDOM << 16) ^ RANDOM ^ n )) )"
+		uci -q show mosdns.$candidate >/dev/null 2>&1 || {
+			echo "$candidate"
+			return 0
+		}
+		n=$((n + 1))
+	done
+}
+
+migrate_named_dns_groups() {
+	local config_file="/etc/config/mosdns"
+	local sec idx new_id ref new_ref changed tmp
+
+	grep -Eq '^[[:space:]]*config[[:space:]]+dns_group[[:space:]]*$' "$config_file" 2>/dev/null || return 0
+
+	changed=0
+	tmp="/tmp/mosdns-dns-group-map.$$"
+	: > "$tmp"
+	idx=0
+
+	for sec in $(uci -q show mosdns | awk -F '[.=]' '/=dns_group$/{print $2}'); do
+		new_id=$(generate_dns_group_id)
+		printf '%s|%s|%s\n' "$idx" "$sec" "$new_id" >> "$tmp"
+		uci -q rename mosdns.$sec="$new_id"
+		changed=1
+		idx=$((idx + 1))
+	done
+
+	for sec in $(uci -q show mosdns | awk -F '[.=]' '/=rule$/{print $2}'); do
+		ref=$(uci -q get mosdns.$sec.dns_group)
+		new_ref=""
+
+		case "$ref" in
+			@dns_group\[*\])
+				idx=$(echo "$ref" | sed -n 's/^@dns_group\[\([0-9][0-9]*\)\]$/\1/p')
+				[ -n "$idx" ] && new_ref=$(awk -F '|' -v i="$idx" '$1 == i { print $3; exit }' "$tmp")
+			;;
+			cfg*)
+				new_ref=$(awk -F '|' -v old="$ref" '$2 == old { print $3; exit }' "$tmp")
+			;;
+			*)
+				new_ref=$(awk -F '|' -v old="$ref" '$2 == old { print $3; exit }' "$tmp")
+				[ -n "$new_ref" ] || new_ref="$ref"
+			;;
+		esac
+
+		[ -n "$new_ref" ] && [ "$new_ref" != "$ref" ] && {
+			uci -q set mosdns.$sec.dns_group="$new_ref"
+			changed=1
+		}
+	done
+
+	rm -f "$tmp"
+	[ "$changed" -eq 1 ] && uci -q commit mosdns
+}
+
 resolve_rule_file_path() {
 	local f="$1"
 	case "$f" in
@@ -142,7 +234,7 @@ normalize_rule_dns_group_refs() {
 		if [ "$mode" != "custom" ] && ! { [ "$mode" = "builtin" ] && { [ "$bt" = "cn_domain" ] || [ "$bt" = "noncn_domain" ] || [ "$bt" = "apple_domain" ] || [ "$bt" = "stream_media" ]; }; }; then
 			continue
 		fi
-		local ref idx target rf
+		local ref resolved_ref target rf
 		ref=$(uci -q get mosdns.$sec.dns_group)
 		target="$default_group"
 		if [ "$mode" = "builtin" ]; then
@@ -171,17 +263,18 @@ normalize_rule_dns_group_refs() {
 			changed=1
 			continue
 		}
-		if echo "$ref" | grep -q '^@dns_group\[[0-9][0-9]*\]$'; then
-			idx=$(echo "$ref" | sed -n 's/^@dns_group\[\([0-9][0-9]*\)\]$/\1/p')
-			if [ -n "$idx" ]; then
-				target=$(uci -q show mosdns.@dns_group[$idx] | awk -F '[.=]' 'NR==1{print $2}')
-				[ -z "$target" ] && target="$default_group"
+
+		resolved_ref=$(resolve_dns_group_section "$ref")
+		if [ -z "$resolved_ref" ]; then
+			uci -q set mosdns.$sec.dns_group="$target"
+			changed=1
+		else
+			uci -q show mosdns.$resolved_ref >/dev/null 2>&1 || {
 				uci -q set mosdns.$sec.dns_group="$target"
 				changed=1
-			fi
-		else
-			uci -q show mosdns.$ref >/dev/null 2>&1 || {
-				uci -q set mosdns.$sec.dns_group="$target"
+			}
+			[ "$ref" = "$resolved_ref" ] || {
+				uci -q set mosdns.$sec.dns_group="$resolved_ref"
 				changed=1
 			}
 		fi
@@ -681,6 +774,7 @@ add_rule_plugins_v2() {
 				;;
 				cn_domain|noncn_domain|apple_domain|stream_media)
 					config_get dns_group "$section" dns_group ""
+					dns_group=$(resolve_dns_group_section "$dns_group")
 					dns_group_tag=$(get_dns_group_tag "$dns_group")
 					[ -z "$dns_group_tag" ] && dns_group_tag="$default_dns_group_tag"
 					[ -z "$dns_group_tag" ] && return 0
@@ -847,6 +941,7 @@ add_rule_plugins_v2() {
 		;;
 		custom|*)
 			config_get dns_group "$section" dns_group ""
+			dns_group=$(resolve_dns_group_section "$dns_group")
 			dns_group_tag=$(get_dns_group_tag "$dns_group")
 			[ -z "$dns_group_tag" ] && dns_group_tag="$default_dns_group_tag"
 			[ -z "$dns_group_tag" ] && return 0
@@ -1819,6 +1914,7 @@ start_service() {
 	normalize_ddns_custom_rule_ttl
 	migrate_response_ip_map_config
 	migrate_cloudflare_cidr_file
+	migrate_named_dns_groups
 	enforce_default_dns_group
 	normalize_rule_dns_group_refs
 	sync_builtin_adblock_settings
