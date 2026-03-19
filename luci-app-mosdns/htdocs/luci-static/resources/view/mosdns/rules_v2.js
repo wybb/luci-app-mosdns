@@ -69,7 +69,9 @@ var RULE_CONTENT_SAMPLES = {
 	blacklist_domain: [
 		'# domain blacklist examples',
 		'ads.example.com',
-		'tracker.example.net'
+		'full:tracker.example.net',
+		'keyword:analytics',
+		'regexp:^ad[sx]?[0-9]*\\.example\\.org$'
 	].join('\n'),
 	blacklist_ptr: [
 		'# ptr blacklist examples',
@@ -175,7 +177,8 @@ var RULE_CONTENT_SAMPLES = {
 		'example.com',
 		'full:www.example.com',
 		'keyword:stream',
-		'regexp:^ads[0-9]*\\.example\\.com$'
+		'regexp:^ads[0-9]*\\.example\\.com$',
+		'domain:media.example.net'
 	].join('\n'),
 	ip_map: [
 		'# ip or cidr list examples',
