@@ -98,6 +98,9 @@ msgstr "启用 DNS 广告过滤"
 msgid "ADblock Source"
 msgstr "广告过滤规则来源"
 
+msgid "Support for local files, such as: file:///var/mosdns/example.txt"
+msgstr "支持本地文件，例如：file:///var/mosdns/example.txt"
+
 msgid "Configuration Editor"
 msgstr "配置编辑器"
 
@@ -184,6 +187,15 @@ msgstr "启用自动更新"
 
 msgid "Update success"
 msgstr "更新成功"
+
+msgid "Updating..."
+msgstr "更新中..."
+
+msgid "Please wait, this may take a few moments..."
+msgstr "请稍候，这可能需要一点时间..."
+
+msgid "Update failed: %s"
+msgstr "更新失败：%s"
 
 msgid "Update failed, Please check the network status"
 msgstr "更新失败，请检查网络状态"
@@ -397,6 +409,9 @@ msgstr "日志数据"
 
 msgid "No log data."
 msgstr "无日志数据。"
+
+msgid "Failed to clean logs."
+msgstr "清理日志失败。"
 
 msgid "Refresh every %s seconds."
 msgstr "每 %s 秒刷新。"

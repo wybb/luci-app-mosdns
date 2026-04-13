@@ -92,7 +92,7 @@ function flushAndRestartMosdns() {
 	return fs.exec('/usr/share/mosdns/mosdns.sh', ['flush'])
 		.catch(function () { return null; })
 		.then(function () {
-			return fs.exec('/etc/init.d/mosdns', ['restart']);
+			return fs.exec('/usr/share/mosdns/mosdns.sh', ['restart_async']);
 		});
 }
 

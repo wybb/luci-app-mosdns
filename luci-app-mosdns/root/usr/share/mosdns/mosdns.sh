@@ -27,10 +27,12 @@ default_interface_dns() (
     if [ "$peerdns" = 0 ] || [ "$proto" = "static" ]; then
         dns=$(uci -q get network.wan.dns)
     else
+        . /usr/share/libubox/jshn.sh
         interface_status=$(ubus call network.interface.wan status)
-        dns1=$(echo "$interface_status" | jsonfilter -e "@['dns-server'][0]")
-        dns2=$(echo "$interface_status" | jsonfilter -e "@['dns-server'][1]")
-        dns="$dns1 $dns2"
+        json_load "$interface_status"
+        json_select 'dns-server' 2>/dev/null || exit 0
+        json_get_values dns
+        json_select ..
     fi
     dns=$(echo "$dns" | xargs)
     [ -n "$dns" ] && echo "$dns" || echo "119.29.29.29 223.5.5.5"
@@ -118,41 +120,60 @@ adlist_update() {
 geodat_update() (
     TMPDIR=$(mktemp -d) || exit 1
     [ -n "$(uci -q get mosdns.config.github_proxy)" ] && mirror="$(uci -q get mosdns.config.github_proxy)/"
+    v2dat_dir=/usr/share/v2ray
     # geoip.dat - cn-private
     geoip_type=$(uci -q get mosdns.config.geoip_type || echo "geoip-only-cn-private")
-    echo -e "Downloading "$mirror"https://github.com/Loyalsoldier/geoip/releases/latest/download/"$geoip_type".dat"
-    curl --connect-timeout 5 -m 120 --ipv4 -kfSLo "$TMPDIR/geoip.dat" ""$mirror"https://github.com/Loyalsoldier/geoip/releases/latest/download/"$geoip_type".dat"
-    [ $? -ne 0 ] && rm -rf "$TMPDIR" && exit 1
     # checksum - geoip.dat
     echo -e "Downloading "$mirror"https://github.com/Loyalsoldier/geoip/releases/latest/download/"$geoip_type".dat.sha256sum"
     curl --connect-timeout 5 -m 20 --ipv4 -kfSLo "$TMPDIR/geoip.dat.sha256sum" ""$mirror"https://github.com/Loyalsoldier/geoip/releases/latest/download/"$geoip_type".dat.sha256sum"
     [ $? -ne 0 ] && rm -rf "$TMPDIR" && exit 1
-    if [ "$(sha256sum "$TMPDIR/geoip.dat" | awk '{print $1}')" != "$(cat "$TMPDIR/geoip.dat.sha256sum" | awk '{print $1}')" ]; then
-        echo -e "\e[1;31mgeoip.dat checksum error"
-        rm -rf "$TMPDIR"
-        exit 1
+    remote_geoip_sum=$(awk '{print $1}' "$TMPDIR/geoip.dat.sha256sum")
+    local_geoip_sum=""
+    [ -f "$v2dat_dir/geoip.dat" ] && local_geoip_sum=$(sha256sum "$v2dat_dir/geoip.dat" | awk '{print $1}')
+    if [ "$local_geoip_sum" = "$remote_geoip_sum" ] && [ -n "$remote_geoip_sum" ]; then
+        echo "geoip.dat is up to date."
+    else
+        echo -e "Downloading "$mirror"https://github.com/Loyalsoldier/geoip/releases/latest/download/"$geoip_type".dat"
+        curl --connect-timeout 5 -m 120 --ipv4 -kfSLo "$TMPDIR/geoip.dat" ""$mirror"https://github.com/Loyalsoldier/geoip/releases/latest/download/"$geoip_type".dat"
+        [ $? -ne 0 ] && rm -rf "$TMPDIR" && exit 1
+        if [ "$(sha256sum "$TMPDIR/geoip.dat" | awk '{print $1}')" != "$remote_geoip_sum" ]; then
+            echo -e "\e[1;31mgeoip.dat checksum error"
+            rm -rf "$TMPDIR"
+            exit 1
+        fi
     fi
 
-    # geosite.dat
-    echo -e "Downloading "$mirror"https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
-    curl --connect-timeout 5 -m 120 --ipv4 -kfSLo "$TMPDIR/geosite.dat" ""$mirror"https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
-    [ $? -ne 0 ] && rm -rf "$TMPDIR" && exit 1
     # checksum - geosite.dat
     echo -e "Downloading "$mirror"https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat.sha256sum"
     curl --connect-timeout 5 -m 20 --ipv4 -kfSLo "$TMPDIR/geosite.dat.sha256sum" ""$mirror"https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat.sha256sum"
     [ $? -ne 0 ] && rm -rf "$TMPDIR" && exit 1
-    if [ "$(sha256sum "$TMPDIR/geosite.dat" | awk '{print $1}')" != "$(cat "$TMPDIR/geosite.dat.sha256sum" | awk '{print $1}')" ]; then
-        echo -e "\e[1;31mgeosite.dat checksum error"
-        rm -rf "$TMPDIR"
-        exit 1
+    remote_geosite_sum=$(awk '{print $1}' "$TMPDIR/geosite.dat.sha256sum")
+    local_geosite_sum=""
+    [ -f "$v2dat_dir/geosite.dat" ] && local_geosite_sum=$(sha256sum "$v2dat_dir/geosite.dat" | awk '{print $1}')
+    if [ "$local_geosite_sum" = "$remote_geosite_sum" ] && [ -n "$remote_geosite_sum" ]; then
+        echo "geosite.dat is up to date."
+    else
+        echo -e "Downloading "$mirror"https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
+        curl --connect-timeout 5 -m 120 --ipv4 -kfSLo "$TMPDIR/geosite.dat" ""$mirror"https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
+        [ $? -ne 0 ] && rm -rf "$TMPDIR" && exit 1
+        if [ "$(sha256sum "$TMPDIR/geosite.dat" | awk '{print $1}')" != "$remote_geosite_sum" ]; then
+            echo -e "\e[1;31mgeosite.dat checksum error"
+            rm -rf "$TMPDIR"
+            exit 1
+        fi
     fi
     rm -rf "$TMPDIR"/*.sha256sum
-    \cp -a "$TMPDIR"/* /usr/share/v2ray
+    [ -f "$TMPDIR/geoip.dat" ] && \cp -a "$TMPDIR/geoip.dat" "$v2dat_dir/"
+    [ -f "$TMPDIR/geosite.dat" ] && \cp -a "$TMPDIR/geosite.dat" "$v2dat_dir/"
     rm -rf "$TMPDIR"
 )
 
 restart_service() {
     /etc/init.d/mosdns restart
+}
+
+restart_service_async() {
+	(sleep 1; /etc/init.d/mosdns restart) >/dev/null 2>&1 &
 }
 
 ui_event_log() {
@@ -448,6 +469,9 @@ case $script_action in
     "cleanlog")
         clean_logfile
     ;;
+    "restart_async")
+		restart_service_async
+	;;
     "version")
         mosdns version
     ;;

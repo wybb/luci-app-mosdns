@@ -14,6 +14,18 @@ var callServiceList = rpc.declare({
 	expect: { '': {} }
 });
 
+var callGetVersion = rpc.declare({
+	object: 'luci.mosdns',
+	method: 'get_version',
+	expect: { '': {} }
+});
+
+var callFlushCache = rpc.declare({
+	object: 'luci.mosdns',
+	method: 'flush_cache',
+	expect: { '': {} }
+});
+
 function getServiceStatus() {
 	return L.resolveDefault(callServiceList('mosdns'), {}).then(function (res) {
 		var isRunning = false;
@@ -74,14 +86,14 @@ function flushAndRestartMosdns() {
 	return fs.exec('/usr/share/mosdns/mosdns.sh', ['flush'])
 		.catch(function () { return null; })
 		.then(function () {
-			return fs.exec('/etc/init.d/mosdns', ['restart']);
+			return fs.exec('/usr/share/mosdns/mosdns.sh', ['restart_async']);
 		});
 }
 
 return view.extend({
 	load: function () {
 		return Promise.all([
-			L.resolveDefault(fs.exec('/usr/bin/mosdns', ['version']), null),
+			L.resolveDefault(callGetVersion(), null),
 		]);
 	},
 
@@ -101,10 +113,8 @@ return view.extend({
 	},
 
 	handleFlushCache: function (m, section_id, ev) {
-		return fs.exec('/usr/share/mosdns/mosdns.sh', ['flush'])
-			.then(function (lazy_cache) {
-				var res = lazy_cache.code;
-				if (res === 0) {
+		return callFlushCache().then(function (res) {
+				if (res && res.success) {
 					ui.addNotification(null, E('p', _('Flushing DNS Cache Success.')), 'info');
 				} else {
 					ui.addNotification(null, E('p', _('Flushing DNS Cache Failed, Please check if MosDNS is running.')), 'error');
@@ -116,8 +126,8 @@ return view.extend({
 		var m, s, o, v;
 		v = '';
 
-		if (basic[0] && basic[0].code === 0) {
-			v = basic[0].stdout.trim();
+		if (basic[0] && basic[0].version) {
+			v = basic[0].version.trim();
 		}
 		m = new form.Map('mosdns', _('MosDNS') + '&#160;' + v,
 			_('MosDNS is a plugin-based DNS forwarder/traffic splitter.'));
@@ -345,7 +355,7 @@ return view.extend({
 				}
 				return fs.write('/etc/mosdns/config_custom.yaml', editorContent.trim().replace(/\r\n/g, '\n') + '\n')
 					.then(function (i) {
-						return fs.exec('/etc/init.d/mosdns', ['restart']);
+						return fs.exec('/usr/share/mosdns/mosdns.sh', ['restart_async']);
 					})
 					.then(function () {
 						return window.location.reload();

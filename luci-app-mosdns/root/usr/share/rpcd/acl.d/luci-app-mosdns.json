@@ -11,6 +11,7 @@
 				"/usr/share/mosdns/mosdns.sh": [ "exec" ]
 			},
 			"ubus": {
+				"luci.mosdns": [ "get_version", "print_log", "flush_cache" ],
 				"file": [ "read" ],
 				"service": [ "list" ]
 			},
@@ -23,6 +24,7 @@
 				"/etc/mosdns/rule/rule-*": [ "write" ]
 			},
 			"ubus": {
+				"luci.mosdns": [ "clean_log" ],
 				"file": [ "write" ]
 			},
 			"uci": [ "mosdns" ]

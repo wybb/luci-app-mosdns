@@ -481,7 +481,7 @@ function flushAndRestartMosdns() {
 	return fs.exec('/usr/share/mosdns/mosdns.sh', [ 'flush' ])
 		.catch(function () { return null; })
 		.then(function () {
-			return fs.exec('/etc/init.d/mosdns', [ 'restart' ]);
+			return fs.exec('/usr/share/mosdns/mosdns.sh', [ 'restart_async' ]);
 		});
 }
 
@@ -612,14 +612,14 @@ return view.extend({
 			return fs.exec('/usr/share/mosdns/mosdns.sh', [ command ])
 				.then(function (res) {
 					if (res.code !== 0) {
-						ui.addNotification(null, E('p', _('Failed to restore default rules.')), 'error');
-						return;
-					}
+					ui.addNotification(null, E('p', _('Failed to restore default rules.')), 'error');
+					return;
+				}
 
-					return fs.exec('/etc/init.d/mosdns', [ 'restart' ])
-						.then(function () {
-							ui.addNotification(null, E('p', _('Default rules restored.')), 'info');
-							window.location.reload();
+				return fs.exec('/usr/share/mosdns/mosdns.sh', [ 'restart_async' ])
+					.then(function () {
+						ui.addNotification(null, E('p', _('Default rules restored.')), 'info');
+						window.location.reload();
 						});
 				});
 		};
