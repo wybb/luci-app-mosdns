@@ -176,6 +176,17 @@ return view.extend({
 			_('When multiple rules match, later rules continue to run.') + ' ' +
 			_('Cloudflare legacy list is auto-migrated into IP mapping rules on service start.'));
 		this.map = m;
+		m.render = L.bind(function () {
+			return form.Map.prototype.render.apply(m, arguments).then(function (node) {
+				node.appendChild(E('style', [
+					'#maincontent .cbi-section-table .cbi-section-table-titles > .th:nth-child(1),',
+					'#maincontent .cbi-section-table .cbi-section-table-row > .td:nth-child(1) { width: 4.5em; white-space: nowrap; }',
+					'#maincontent .cbi-section-table .cbi-section-table-titles > .th.cbi-section-actions,',
+					'#maincontent .cbi-section-table .cbi-section-table-row > .td.cbi-section-actions { width: 1%; white-space: nowrap; }'
+				]));
+				return node;
+			});
+		}, this);
 
 		s = m.section(form.GridSection, 'ip_map', _('IP Mapping List'));
 		s.anonymous = true;

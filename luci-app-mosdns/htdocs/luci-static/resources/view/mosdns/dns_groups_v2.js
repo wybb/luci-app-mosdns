@@ -116,7 +116,13 @@ return view.extend({
 					'#maincontent .cbi-section-table .cbi-section-table-titles { display: table-row !important; }',
 					'#maincontent .cbi-section-table .cbi-section-table-row > .td { display: table-cell !important; }',
 					'#maincontent .cbi-section-table .cbi-section-table-titles > .th { display: table-cell !important; }',
-					'#maincontent .cbi-section-table .cbi-section-table-row > .td[data-title]::before { display: none !important; content: none !important; }'
+					'#maincontent .cbi-section-table .cbi-section-table-row > .td[data-title]::before { display: none !important; content: none !important; }',
+					'#maincontent .cbi-section-table .cbi-section-table-titles > .th:nth-child(1),',
+					'#maincontent .cbi-section-table .cbi-section-table-row > .td:nth-child(1) { width: 8em; white-space: nowrap; }',
+					'#maincontent .cbi-section-table .cbi-section-table-titles > .th:nth-child(3),',
+					'#maincontent .cbi-section-table .cbi-section-table-row > .td:nth-child(3) { width: 4.5em; white-space: nowrap; }',
+					'#maincontent .cbi-section-table .cbi-section-table-titles > .th.cbi-section-actions,',
+					'#maincontent .cbi-section-table .cbi-section-table-row > .td.cbi-section-actions { width: 1%; white-space: nowrap; }'
 				]));
 				return node;
 			});

@@ -597,6 +597,21 @@ return view.extend({
 		m = new form.Map('mosdns', _('Rule Settings'),
 			_('Rules are matched from top to bottom. If no rule matches, the default DNS group is used as fallback.'));
 		this.map = m;
+		m.render = L.bind(function () {
+			return form.Map.prototype.render.apply(m, arguments).then(function (node) {
+				node.appendChild(E('style', [
+					'#maincontent .cbi-section-table .cbi-section-table-titles > .th:nth-child(1),',
+					'#maincontent .cbi-section-table .cbi-section-table-row > .td:nth-child(1) { width: 4.5em; white-space: nowrap; }',
+					'#maincontent .cbi-section-table .cbi-section-table-titles > .th:nth-child(3),',
+					'#maincontent .cbi-section-table .cbi-section-table-row > .td:nth-child(3) { width: 8em; white-space: nowrap; }',
+					'#maincontent .cbi-section-table .cbi-section-table-titles > .th:nth-child(4),',
+					'#maincontent .cbi-section-table .cbi-section-table-row > .td:nth-child(4) { width: 7em; white-space: nowrap; }',
+					'#maincontent .cbi-section-table .cbi-section-table-titles > .th.cbi-section-actions,',
+					'#maincontent .cbi-section-table .cbi-section-table-row > .td.cbi-section-actions { width: 1%; white-space: nowrap; }'
+				]));
+				return node;
+			});
+		}, this);
 
 		a = m.section(form.TypedSection, 'mosdns', _('Default Actions'));
 		a.anonymous = true;
