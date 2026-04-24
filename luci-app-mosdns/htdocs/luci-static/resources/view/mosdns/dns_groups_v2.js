@@ -129,7 +129,7 @@ return view.extend({
 		}, this);
 
 		s = m.section(form.GridSection, 'dns_group', _('DNS Group List'));
-		s.anonymous = false;
+		s.anonymous = true;
 		s.addremove = true;
 		s.sortable = false;
 		s.nodescriptions = true;
