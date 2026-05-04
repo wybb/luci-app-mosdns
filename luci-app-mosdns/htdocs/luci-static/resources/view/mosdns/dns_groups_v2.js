@@ -306,8 +306,10 @@ return view.extend({
 		o.modalonly = true;
 		o.sortable = false;
 
-		o = s.option(form.Value, 'concurrent', _('Concurrent'));
+		o = s.option(form.Value, 'concurrent', _('Group Concurrent'),
+			_('Override the global DNS server concurrency for this group. Leave empty to inherit the global setting.'));
 		o.datatype = 'and(uinteger,min(1),max(3))';
+		o.placeholder = _('Inherit global setting');
 		o.modalonly = true;
 		o.sortable = false;
 

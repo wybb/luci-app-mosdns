@@ -316,6 +316,20 @@ msgid ""
 "allowed to initiate requests at the same time"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:309
+msgid "Group Concurrent"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:310
+msgid ""
+"Override the global DNS server concurrency for this group. Leave empty to "
+"inherit the global setting."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:313
+msgid "Inherit global setting"
+msgstr ""
+
 #: htdocs/luci-static/resources/view/mosdns/basic.js:273
 msgid "Idle Timeout"
 msgstr ""

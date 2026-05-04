@@ -321,10 +321,19 @@ msgid "Cisco Public DNS (208.67.220.220)"
 msgstr "思科公共 DNS（208.67.220.220）"
 
 msgid "Concurrent"
-msgstr "DNS 服务器并发数（默认 2）"
+msgstr "全局 DNS 服务器并发数（默认 2）"
 
 msgid "DNS query request concurrency, The number of upstream DNS servers that are allowed to initiate requests at the same time"
 msgstr "DNS 查询请求并发数，允许同时发起请求的上游 DNS 服务器数量"
+
+msgid "Group Concurrent"
+msgstr "分组 DNS 服务器并发数"
+
+msgid "Override the global DNS server concurrency for this group. Leave empty to inherit the global setting."
+msgstr "覆盖当前分组的 DNS 服务器并发数；留空则继承基本设置高级选项中的全局值。"
+
+msgid "Inherit global setting"
+msgstr "继承全局设置"
 
 msgid "Idle Timeout"
 msgstr "空闲超时"
