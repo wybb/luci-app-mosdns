@@ -105,6 +105,39 @@ const methods = {
 			}
 			return { error: res.stdout };
 		}
+	},
+
+	start_update: {
+		call: function() {
+			let lock = exec_sys('mkdir -p /var/lock && mkdir /var/lock/mosdns_update.lock');
+			if (lock.code !== 0) {
+				return { success: false, error: 'Another update is already in progress.' };
+			}
+
+			let ok = writefile('/var/log/mosdns_update.log', 'Starting update...\n');
+			if (ok === false || ok === null) {
+				exec_sys('rm -rf /var/lock/mosdns_update.lock');
+				return { success: false, error: 'Failed to initialize update log.' };
+			}
+
+			let cmd = "(sh -c 'trap \"rm -rf /var/lock/mosdns_update.lock\" EXIT; /usr/share/mosdns/mosdns.sh geodata >> /var/log/mosdns_update.log 2>&1; code=$?; if [ $code -eq 0 ]; then echo UPDATE_FINISHED >> /var/log/mosdns_update.log; else echo UPDATE_FAILED >> /var/log/mosdns_update.log; fi; exit $code' >/dev/null 2>&1 &)";
+			let res = exec_sys(cmd);
+			if (res.code !== 0) {
+				exec_sys('rm -rf /var/lock/mosdns_update.lock');
+				writefile('/var/log/mosdns_update.log', 'UPDATE_FAILED\n');
+				return { success: false, error: res.stdout || 'Failed to start update.' };
+			}
+			return { success: true };
+		}
+	},
+
+	get_update_log: {
+		call: function() {
+			if (stat('/var/log/mosdns_update.log')) {
+				return { log: readfile('/var/log/mosdns_update.log') };
+			}
+			return { log: '' };
+		}
 	}
 };
 

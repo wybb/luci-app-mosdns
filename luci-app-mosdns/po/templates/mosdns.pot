@@ -117,6 +117,15 @@ msgstr ""
 msgid "Log File"
 msgstr ""
 
+msgid "Log File Size"
+msgstr ""
+
+msgid "Log Backup Count"
+msgstr ""
+
+msgid "Invalid log size. Use a positive number with optional K/KB, M/MB, G/GB, or T/TB suffix."
+msgstr ""
+
 #: htdocs/luci-static/resources/view/mosdns/basic.js:177
 msgid "DNS Forward"
 msgstr ""
@@ -677,6 +686,18 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/mosdns/update.js:10
 msgid "Please wait, this may take a few moments..."
+msgstr ""
+
+msgid "Starting update..."
+msgstr ""
+
+msgid "Updating Database..."
+msgstr ""
+
+msgid "Close"
+msgstr ""
+
+msgid "Another update is already in progress."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/mosdns/update.js:16

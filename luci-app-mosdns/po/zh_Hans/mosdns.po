@@ -212,6 +212,27 @@ msgstr "自定义"
 msgid "Log File"
 msgstr "日志文件"
 
+msgid "Log File Size"
+msgstr "日志文件大小"
+
+msgid "Log Backup Count"
+msgstr "日志备份数量"
+
+msgid "Invalid log size. Use a positive number with optional K/KB, M/MB, G/GB, or T/TB suffix."
+msgstr "日志大小无效。请使用正整数，可带 K/KB、M/MB、G/GB 或 T/TB 后缀。"
+
+msgid "Starting update..."
+msgstr "正在开始更新..."
+
+msgid "Updating Database..."
+msgstr "正在更新数据库..."
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Another update is already in progress."
+msgstr "已有另一个更新任务正在运行。"
+
 msgid "China DNS prefer IPv4"
 msgstr "国内 DNS 首选 IPv4"
 

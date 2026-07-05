@@ -195,6 +195,21 @@ return view.extend({
 		o.default = '/var/log/mosdns.log';
 		o.depends('configfile', '/var/etc/mosdns.json');
 
+		o = s.taboption('basic', form.Value, 'log_size', _('Log File Size'));
+		o.placeholder = '1M';
+		o.default = '1M';
+		o.depends('configfile', '/var/etc/mosdns.json');
+		o.validate = function(section_id, value) {
+			if (value == null || value === '' || /^[1-9][0-9]*([KkMmGgTt][Bb]?)?$/.test(value))
+				return true;
+			return _('Invalid log size. Use a positive number with optional K/KB, M/MB, G/GB, or T/TB suffix.');
+		};
+
+		o = s.taboption('basic', form.Value, 'log_backups', _('Log Backup Count'));
+		o.datatype = 'and(uinteger,min(1))';
+		o.default = '3';
+		o.depends('configfile', '/var/etc/mosdns.json');
+
 		o = s.taboption('basic', form.Flag, 'redirect', _('DNS Forward'), _('Forward Dnsmasq Domain Name resolution requests to MosDNS'));
 		o.default = false;
 

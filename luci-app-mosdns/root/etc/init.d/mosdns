@@ -31,6 +31,8 @@ get_config() {
 	config_get listen_address $1 listen_address "0.0.0.0"
 	config_get log_file $1 log_file "/var/log/mosdns.log"
 	config_get log_level $1 log_level "info"
+	config_get log_size $1 log_size "1M"
+	config_get log_backups $1 log_backups 3
 	config_get minimal_ttl $1 minimal_ttl 0
 	config_get maximum_ttl $1 maximum_ttl 0
 	config_get redirect $1 redirect 0
@@ -751,7 +753,7 @@ add_rule_plugins_v2() {
 					set_tag="rule_adblock_set_${section}"
 					json_add_object
 					json_add_string "tag" "$set_tag"
-					json_add_string "type" "domain_set"
+					json_add_string "type" "adblock_set"
 					json_add_object "args"
 					json_add_array "files"
 					for adlist_file in $($MOSDNS_SCRIPT adlist); do
@@ -1069,10 +1071,12 @@ generate_config_v2() {
 	json_add_object 'log'
 	json_add_string 'level' "$log_level"
 	json_add_string 'file' "$log_file"
+	[ -n "$log_size" ] && json_add_string 'size' "$log_size"
+	[ -n "$log_backups" ] && json_add_int 'backups' "$log_backups"
 	json_close_object
 
 	json_add_object 'api'
-	json_add_string 'http' "0.0.0.0:$listen_port_api"
+	json_add_string 'http' "127.0.0.1:$listen_port_api"
 	json_close_object
 
 	json_add_array 'include'
@@ -1226,10 +1230,12 @@ generate_config() {
 	json_add_object 'log'
 	json_add_string "level" "$log_level"
 	json_add_string "file" "$log_file"
+	[ -n "$log_size" ] && json_add_string "size" "$log_size"
+	[ -n "$log_backups" ] && json_add_int "backups" "$log_backups"
 	json_close_object
 	# api
 	json_add_object 'api'
-	json_add_string "http" "0.0.0.0:$listen_port_api"
+	json_add_string "http" "127.0.0.1:$listen_port_api"
 	json_close_object
 	# include
 	json_add_array "include"

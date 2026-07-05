@@ -1,8 +1,21 @@
 'use strict';
 'require form';
 'require fs';
+'require rpc';
 'require ui';
 'require view';
+
+var callStartUpdate = rpc.declare({
+	object: 'luci.mosdns',
+	method: 'start_update',
+	expect: { '': {} }
+});
+
+var callGetUpdateLog = rpc.declare({
+	object: 'luci.mosdns',
+	method: 'get_update_log',
+	expect: { '': {} }
+});
 
 function flushAndRestartMosdns() {
 	return fs.exec('/usr/share/mosdns/mosdns.sh', ['flush'])
@@ -29,16 +42,61 @@ return view.extend({
 	},
 
 	handleUpdate: function (m, section_id, ev) {
-		return fs.exec('/usr/share/mosdns/mosdns.sh', ['geodata'])
-			.then(function (i) {
-				var res = i.code;
-				if (res === 0) {
-					ui.addNotification(null, E('p', _('Update success')), 'info');
-				} else {
-					ui.addNotification(null, E('p', i.stderr + '<br />' + i.stdout), 'warn');
-					ui.addNotification(null, E('p', _('Update failed, Please check the network status')), 'error');
+		var statusMsg = E('p', { 'class': 'spinning' }, _('Please wait, this may take a few moments...'));
+		var logTextarea = E('textarea', {
+			'readonly': 'readonly',
+			'style': 'width: 100%; height: 300px; font-family: monospace; font-size: 12px; margin-top: 10px;',
+			'placeholder': _('Starting update...')
+		});
+		var closeButton = E('button', {
+			'class': 'btn',
+			'style': 'display: none;',
+			'click': ui.hideModal
+		}, _('Close'));
+
+		ui.showModal(_('Updating Database...'), [
+			statusMsg,
+			logTextarea,
+			E('div', { 'class': 'right' }, [ closeButton ])
+		]);
+
+		var pollLog = function() {
+			return callGetUpdateLog().then(function(res) {
+				if (res && res.log) {
+					logTextarea.value = res.log;
+					logTextarea.scrollTop = logTextarea.scrollHeight;
+
+					if (res.log.match(/UPDATE_FINISHED/)) {
+						statusMsg.textContent = _('Update success');
+						statusMsg.classList.remove('spinning');
+						closeButton.style.display = '';
+						return;
+					}
+
+					if (res.log.match(/UPDATE_FAILED/)) {
+						statusMsg.textContent = _('Update failed, Please check the network status');
+						statusMsg.classList.remove('spinning');
+						closeButton.style.display = '';
+						return;
+					}
 				}
+
+				return new Promise(function(resolve) {
+					window.setTimeout(resolve, 1000);
+				}).then(pollLog);
 			});
+		};
+
+		return callStartUpdate().then(function(res) {
+			if (!res || !res.success) {
+				statusMsg.textContent = (res && res.error) ? res.error : _('Update failed, Please check the network status');
+				statusMsg.classList.remove('spinning');
+				closeButton.style.display = '';
+				return;
+			}
+
+			return pollLog();
+		});
 	},
 
 		render: function () {
@@ -83,7 +141,7 @@ return view.extend({
 		o.value('geoip', _('Full'));
 		o.value('geoip-only-cn-private', _('Little'));
 		o.rmempty = false;
-		o.default = 'geoip';
+		o.default = 'geoip-only-cn-private';
 
 		o = s.option(form.Value, 'github_proxy', _('GitHub Proxy'),
 			_('Update data files with GitHub Proxy, leave blank to disable proxy downloads.'));
