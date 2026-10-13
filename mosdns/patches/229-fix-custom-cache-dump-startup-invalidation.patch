@@ -1,0 +1,275 @@
+From: mosdns v2 rebuild
+Subject: [PATCH] safely invalidate configured cache dumps before startup
+
+MOSDNS_INVALIDATE_CACHE=1 requires successful invalidation of each configured
+dump before plugin initialization can succeed. Reject non-regular final path
+entries, preserve unsafe targets, and publish dumps by atomic rename rather
+than truncating through symlinks. Parent-directory symlinks remain supported
+for OpenWrt layouts such as /var -> /tmp.
+
+--- a/plugin/executable/cache/cache.go
++++ b/plugin/executable/cache/cache.go
+@@ -28,6 +28,7 @@
+ 	"io"
+ 	"net/http"
+ 	"os"
++	"path/filepath"
+ 	"strconv"
+ 	"sync"
+ 	"sync/atomic"
+@@ -92,6 +93,7 @@
+ type Cache struct {
+ 	args            *Args
+ 	unregisterRules func()
++	startupErr      error
+ 	dumpMu          sync.Mutex
+ 
+ 	logger       *zap.Logger
+@@ -118,6 +120,10 @@
+ 		MetricsTag: bp.Tag(),
+ 	})
+ 
++	if c.startupErr != nil {
++		_ = c.Close()
++		return nil, c.startupErr
++	}
+ 	if err := c.RegMetricsTo(prometheus.WrapRegistererWithPrefix(PluginType+"_", bp.M().GetMetricsReg())); err != nil {
+ 		return nil, fmt.Errorf("failed to register metrics, %w", err)
+ 	}
+@@ -199,7 +205,7 @@
+ 		p.backend.Flush()
+ 		p.updatedKey.Add(minimumChangesToDump)
+ 		if p.args.DumpFile != "" {
+-			if err := os.Remove(p.args.DumpFile); err != nil && !os.IsNotExist(err) {
++			if err := removeRegularDump(p.args.DumpFile); err != nil {
+ 				p.logger.Error("failed to invalidate rule-dependent cache dump", zap.Error(err))
+ 			}
+ 		}
+@@ -207,6 +213,10 @@
+ 
+ 	if err := p.loadDump(); err != nil {
+ 		p.logger.Error("failed to load cache dump", zap.Error(err))
++		if os.Getenv("MOSDNS_INVALIDATE_CACHE") == "1" {
++			p.startupErr = err
++			return p
++		}
+ 	}
+ 	p.startDumpLoop()
+ 	if p.args.Prefetch {
+@@ -386,19 +396,63 @@
+ }
+ 
+ func (c *Cache) Close() error {
+-	if err := c.dumpCache(); err != nil {
+-		c.logger.Error("failed to dump cache", zap.Error(err))
++	if c.startupErr == nil {
++		if err := c.dumpCache(); err != nil {
++			c.logger.Error("failed to dump cache", zap.Error(err))
++		}
+ 	}
+ 	c.closeOnce.Do(func() {
+ 		close(c.closeNotify)
+ 		c.unregisterRules()
+ 	})
+-	return c.backend.Close()
++	err := c.backend.Close()
++	if c.startupErr != nil {
++		return c.startupErr
++	}
++	return err
++}
++
++// validateDumpPath deliberately permits parent directory symlinks (OpenWrt's
++// /var commonly points to /tmp), but never accepts a non-regular final entry.
++func validateDumpPath(path string) error {
++	info, err := os.Lstat(path)
++	if os.IsNotExist(err) {
++		return nil
++	}
++	if err != nil {
++		return err
++	}
++	if !info.Mode().IsRegular() {
++		return fmt.Errorf("unsafe cache dump path %s: expected regular file", path)
++	}
++	return nil
++}
++
++func removeRegularDump(path string) error {
++	if err := validateDumpPath(path); err != nil {
++		return err
++	}
++	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
++		return err
++	}
++	return nil
+ }
+ 
+ func (c *Cache) loadDump() error {
+ 	if len(c.args.DumpFile) == 0 {
+ 		return nil
++	}
++	// The service launcher cannot reliably discover custom YAML dump paths.
++	// Apply invalidation to this plugin's actual configured path before reading
++	// any entries. A failed removal still must never load the stale dump.
++	if os.Getenv("MOSDNS_INVALIDATE_CACHE") == "1" {
++		if err := removeRegularDump(c.args.DumpFile); err != nil {
++			return fmt.Errorf("failed to invalidate startup cache dump: %w", err)
++		}
++		return nil
++	}
++	if err := validateDumpPath(c.args.DumpFile); err != nil {
++		return err
+ 	}
+ 	f, err := os.Open(c.args.DumpFile)
+ 	if err != nil {
+@@ -454,15 +508,34 @@
+ 		return nil
+ 	}
+ 
+-	f, err := os.Create(c.args.DumpFile)
++	if err := validateDumpPath(c.args.DumpFile); err != nil {
++		return err
++	}
++	// Never truncate the destination: a final symlink swapped in after the
++	// check is replaced by rename rather than followed. Failed writes leave
++	// the previous complete dump intact.
++	f, err := os.CreateTemp(filepath.Dir(c.args.DumpFile), ".mosdns-cache-*")
+ 	if err != nil {
+ 		return err
+ 	}
++	defer os.Remove(f.Name())
+ 	defer f.Close()
+ 
+ 	en, err := c.writeDumpLocked(f, generation)
+ 	if err != nil {
+ 		return fmt.Errorf("failed to write dump, %w", err)
++	}
++	if err := f.Sync(); err != nil {
++		return err
++	}
++	if err := f.Close(); err != nil {
++		return err
++	}
++	if err := validateDumpPath(c.args.DumpFile); err != nil {
++		return err
++	}
++	if err := os.Rename(f.Name(), c.args.DumpFile); err != nil {
++		return err
+ 	}
+ 	c.logger.Info("cache dumped", zap.Int("entries", en))
+ 	return nil
+--- /dev/null
++++ b/plugin/executable/cache/startup_invalidation_test.go
+@@ -0,0 +1,111 @@
++package cache
++
++import (
++	"github.com/IrineSistiana/mosdns/v5/coremain"
++	"os"
++	"path/filepath"
++	"testing"
++)
++
++func TestStartupInvalidationOfConfiguredDump(t *testing.T) {
++	for _, invalidation := range []string{"0", "1"} {
++		t.Run(invalidation, func(t *testing.T) {
++			path := filepath.Join(t.TempDir(), "custom-user-cache.dump")
++			t.Setenv("MOSDNS_INVALIDATE_CACHE", "0")
++			source := NewCache(&Args{DumpFile: path}, Opts{})
++			q := reloadQuery()
++			if !source.saveForGeneration(q.RuleGeneration, getMsgKey(q.Q()), reloadResponse(q.Q())) {
++				t.Fatal("could not seed dump")
++			}
++			if err := source.Close(); err != nil {
++				t.Fatal(err)
++			}
++			if _, err := os.Stat(path); err != nil {
++				t.Fatal(err)
++			}
++
++			t.Setenv("MOSDNS_INVALIDATE_CACHE", invalidation)
++			loaded := NewCache(&Args{DumpFile: path}, Opts{})
++			defer loaded.Close()
++			if invalidation == "1" {
++				if loaded.backend.Len() != 0 {
++					t.Fatal("stale configured dump was loaded")
++				}
++				if _, err := os.Stat(path); !os.IsNotExist(err) {
++					t.Fatalf("stale dump not removed: %v", err)
++				}
++			} else if loaded.backend.Len() != 1 {
++				t.Fatal("normal startup did not reuse dump")
++			}
++		})
++	}
++}
++
++func TestStartupInvalidationRejectsUnsafePaths(t *testing.T) {
++	t.Setenv("MOSDNS_INVALIDATE_CACHE", "1")
++	for _, kind := range []string{"symlink", "directory", "missing"} {
++		t.Run(kind, func(t *testing.T) {
++			root := t.TempDir()
++			marker := filepath.Join(root, "marker")
++			if err := os.WriteFile(marker, []byte("do not change"), 0600); err != nil {
++				t.Fatal(err)
++			}
++			path := filepath.Join(root, "cache.dump")
++			switch kind {
++			case "symlink":
++				if err := os.Symlink(marker, path); err != nil {
++					t.Fatal(err)
++				}
++			case "directory":
++				if err := os.Mkdir(path, 0700); err != nil {
++					t.Fatal(err)
++				}
++			}
++			m := coremain.NewTestMosdnsWithPlugins(nil)
++			plugin, err := Init(coremain.NewBP("test", m), &Args{DumpFile: path})
++			if kind == "missing" {
++				if err != nil {
++					t.Fatal(err)
++				}
++				if err := plugin.(*Cache).Close(); err != nil {
++					t.Fatal(err)
++				}
++			} else {
++				if err == nil {
++					plugin.(*Cache).Close()
++					t.Fatal("unsafe startup unexpectedly succeeded")
++				}
++				info, statErr := os.Lstat(path)
++				if statErr != nil {
++					t.Fatal("unsafe entry removed", statErr)
++				}
++				if kind == "symlink" && info.Mode()&os.ModeSymlink == 0 {
++					t.Fatal("symlink was replaced")
++				}
++			}
++			if data, err := os.ReadFile(marker); err != nil || string(data) != "do not change" {
++				t.Fatal("marker changed", err)
++			}
++		})
++	}
++}
++
++func TestStartupInvalidationDumpWritesRejectSymlinks(t *testing.T) {
++	t.Setenv("MOSDNS_INVALIDATE_CACHE", "0")
++	root := t.TempDir()
++	path, marker := filepath.Join(root, "dump"), filepath.Join(root, "marker")
++	c := NewCache(&Args{DumpFile: path}, Opts{})
++	defer c.Close()
++	if err := os.WriteFile(marker, []byte("keep"), 0600); err != nil {
++		t.Fatal(err)
++	}
++	if err := os.Symlink(marker, path); err != nil {
++		t.Fatal(err)
++	}
++	if err := c.dumpCache(); err == nil {
++		t.Fatal("dump followed symlink")
++	}
++	if data, err := os.ReadFile(marker); err != nil || string(data) != "keep" {
++		t.Fatal("marker changed", err)
++	}
++}

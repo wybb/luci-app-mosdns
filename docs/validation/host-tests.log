@@ -1,0 +1,66 @@
+Native ucode compile and rule-file fault-injection tests passed
+Native geodata staging-isolation test passed
+Downloading https://two.example/new.txt
+Downloading https://one.example/collision.txt
+Native missing-only adlist preparation tests passed
+Native log containment, cap, and descriptor-race marker tests passed
+test_historical_configs_start_with_real_engine (test_engine_v2.EngineV2Tests.test_historical_configs_start_with_real_engine) ... ok
+test_mapping_stop_and_continue_are_stable_on_cache_hits (test_engine_v2.EngineV2Tests.test_mapping_stop_and_continue_are_stable_on_cache_hits) ... ok
+test_ordered_rule_ttl_blacklist_hosts_and_ipv4 (test_engine_v2.EngineV2Tests.test_ordered_rule_ttl_blacklist_hosts_and_ipv4) ... ok
+test_redirect_keeps_downstream_continuation_and_caches_final_answer (test_engine_v2.EngineV2Tests.test_redirect_keeps_downstream_continuation_and_caches_final_answer) ... ok
+test_all_cache_write_paths_are_generation_fenced (test_hot_reload_cache.HotReloadCacheTests.test_all_cache_write_paths_are_generation_fenced) ... ok
+test_all_six_providers_publish_only_validated_matchers (test_hot_reload_cache.HotReloadCacheTests.test_all_six_providers_publish_only_validated_matchers) ... ok
+test_cache_lifecycle_and_dump_invalidation (test_hot_reload_cache.HotReloadCacheTests.test_cache_lifecycle_and_dump_invalidation) ... ok
+test_go_regressions_offline (test_hot_reload_cache.HotReloadCacheTests.test_go_regressions_offline) ... ok  	github.com/IrineSistiana/mosdns/v5/pkg/rule_state	1.010s
+ok  	github.com/IrineSistiana/mosdns/v5/plugin/executable/cache	1.043s
+ok  	github.com/IrineSistiana/mosdns/v5/coremain	1.033s
+ok
+test_cached_hosts_reload_and_malformed_file_retention (test_hot_reload_live.LiveHotReload.test_cached_hosts_reload_and_malformed_file_retention) ... ok
+test_validation_failure_keeps_live_files_and_activation_can_restore (test_lifecycle.GeoStaging.test_validation_failure_keeps_live_files_and_activation_can_restore) ... ok
+test_apply_stops_before_dump_invalidation (test_lifecycle.Lifecycle.test_apply_stops_before_dump_invalidation) ... ok
+test_changed_restart_invalidates_dump (test_lifecycle.Lifecycle.test_changed_restart_invalidates_dump) ... ok
+test_custom_yaml_snapshot_rollback_does_not_rewrite_saved_file (test_lifecycle.Lifecycle.test_custom_yaml_snapshot_rollback_does_not_rewrite_saved_file) ... ok
+test_failed_start_restores_previous_runtime (test_lifecycle.Lifecycle.test_failed_start_restores_previous_runtime) ... ok
+test_stop_timeout_does_not_invalidate_or_publish (test_lifecycle.Lifecycle.test_stop_timeout_does_not_invalidate_or_publish) ... ok
+test_unchanged_restart_keeps_dump (test_lifecycle.Lifecycle.test_unchanged_restart_keeps_dump) ... ok
+test_validation_failure_does_not_stop_or_publish (test_lifecycle.Lifecycle.test_validation_failure_does_not_stop_or_publish) ... ok
+test_full_restore_preserves_files_and_resets_ddns (test_native_restore.NativeRestore.test_full_restore_preserves_files_and_resets_ddns) ... ok
+test_keep_groups_preserves_files_and_resets_ddns (test_native_restore.NativeRestore.test_keep_groups_preserves_files_and_resets_ddns) ... ok
+test_invalid_real_uci_and_missing_rule_publish_no_json (test_native_uci.NativeUciTests.test_invalid_real_uci_and_missing_rule_publish_no_json) ... ok
+test_real_lists_generate_json_and_manifest (test_native_uci.NativeUciTests.test_real_lists_generate_json_and_manifest) ... ok
+test_unreadable_backup_blocks_publication (test_native_uci.NativeUciTests.test_unreadable_backup_blocks_publication) ... ok
+test_corrupt_backup_fails_closed (test_redirect.Redirect.test_corrupt_backup_fails_closed) ... ok
+test_invalid_port_does_not_modify (test_redirect.Redirect.test_invalid_port_does_not_modify) ... ok
+test_legacy_lock_does_not_snapshot_redirected_state (test_redirect.Redirect.test_legacy_lock_does_not_snapshot_redirected_state) ... ok
+test_restore_exact_lists_absence_and_other_instances (test_redirect.Redirect.test_restore_exact_lists_absence_and_other_instances) ... ok
+test_adlist_filename_collisions_and_secure_sources (test_v2.V2Tests.test_adlist_filename_collisions_and_secure_sources) ... ok
+test_cache_first_optional_stats_prefetch_and_no_legacy_activation (test_v2.V2Tests.test_cache_first_optional_stats_prefetch_and_no_legacy_activation) ... ok
+test_invalid_inputs_fail (test_v2.V2Tests.test_invalid_inputs_fail) ... ok
+test_ip_mapping_stop_continue_original_match_and_outer_exit (test_v2.V2Tests.test_ip_mapping_stop_continue_original_match_and_outer_exit) ... ok
+test_legacy_mapping_conversion_preserves_existing_mappings (test_v2.V2Tests.test_legacy_mapping_conversion_preserves_existing_mappings) ... ok
+test_legacy_migration_preserves_explicit_stats_and_prefetch (test_v2.V2Tests.test_legacy_migration_preserves_explicit_stats_and_prefetch) ... ok
+test_log_paths_reject_traversal_and_protected_locations (test_v2.V2Tests.test_log_paths_reject_traversal_and_protected_locations) ... ok
+test_migration_idempotence_preserves_v2_sections_and_serialization (test_v2.V2Tests.test_migration_idempotence_preserves_v2_sections_and_serialization) ... ok
+test_migration_repairs_missing_or_multiple_defaults_idempotently (test_v2.V2Tests.test_migration_repairs_missing_or_multiple_defaults_idempotently) ... ok
+test_order_fallback_and_editable_group_names (test_v2.V2Tests.test_order_fallback_and_editable_group_names) ... ok
+test_original_fork_config_fixture (test_v2.V2Tests.test_original_fork_config_fixture) ... ok
+test_original_upstream_fixture_migration_and_streaming_file (test_v2.V2Tests.test_original_upstream_fixture_migration_and_streaming_file) ... ok
+test_generate_stdout_is_only_json_and_legacy_warning_is_stderr (test_v2_cli.V2CliTests.test_generate_stdout_is_only_json_and_legacy_warning_is_stderr) ... ok
+test_log_realpath_rejects_symlink_escape_and_accepts_alias_root (test_v2_cli.V2CliTests.test_log_realpath_rejects_symlink_escape_and_accepts_alias_root) ... ok
+test_migration_filesystem_backup_idempotence_and_preserved_rules (test_v2_cli.V2CliTests.test_migration_filesystem_backup_idempotence_and_preserved_rules) ... ok
+test_missing_rule_file_fails_without_candidate_output (test_v2_cli.V2CliTests.test_missing_rule_file_fails_without_candidate_output) ... ok
+test_staged_geodata_validates_but_manifest_and_config_stay_canonical (test_v2_cli.V2CliTests.test_staged_geodata_validates_but_manifest_and_config_stay_canonical) ... ok
+test_unreadable_backup_prevents_migration_publication (test_v2_cli.V2CliTests.test_unreadable_backup_prevents_migration_publication) ... ok
+test_anonymous_group_ids_and_quoted_names_survive_real_parser (test_v2_real_uci.RealUciTests.test_anonymous_group_ids_and_quoted_names_survive_real_parser) ... ok
+test_default_group_repairs_match_legacy_selection (test_v2_real_uci.RealUciTests.test_default_group_repairs_match_legacy_selection) ... ok
+test_historical_fixtures_parse_compile_and_serialization_roundtrip (test_v2_real_uci.RealUciTests.test_historical_fixtures_parse_compile_and_serialization_roundtrip) ... ok
+test_real_cli_migration_backup_and_repeat_are_idempotent (test_v2_real_uci.RealUciTests.test_real_cli_migration_backup_and_repeat_are_idempotent) ... ok
+
+----------------------------------------------------------------------
+Ran 48 tests in 15.638s
+
+OK
+PASS: public form construction, read-only legacy controls, opt-in statistics, stable group IDs, ordered rules/mappings, continued/stopped mappings, no private save/DOM hooks.
+PASS: all retained view RPCs allowed by ACL; no raw writes/exec; statistics routes rule editing to ordered v2 rules.
+PASS: read errors preserve the original reference and allow recovery; write errors do not change pointer; success awaits RPC; normalization; empty editor writes; hidden editor retained.
+RPC fault-injection, allowlist, ACL, update preservation and installer tests passed

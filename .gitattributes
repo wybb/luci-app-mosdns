@@ -1,0 +1,3 @@
+# Unified patches contain mandatory context-prefix spaces before Go tabs.
+# Whitespace of the resulting Go source is verified with gofmt and real builds.
+mosdns/patches/*.patch -whitespace

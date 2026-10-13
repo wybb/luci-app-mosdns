@@ -2,7 +2,7 @@
 
 'use strict';
 
-import { popen, stat, readfile, open } from 'fs';
+import { popen, stat, readfile, open, writefile, rename, unlink, rmdir, realpath, chmod } from 'fs';
 import { cursor } from 'uci';
 
 function to_array(val) {
@@ -40,22 +40,64 @@ function get_logfile_path_internal() {
 	let configfile = uci_cursor.get('mosdns', 'config', 'configfile');
 
 	if (configfile === '/var/etc/mosdns.json' || !configfile) {
-		return uci_cursor.get('mosdns', 'config', 'log_file');
-	} else {
-		let content = readfile(configfile);
-		if (content) {
-			let m = match(content, /file:\s*([^\r\n]+)/);
+		return uci_cursor.get('mosdns', 'config', 'log_file') || '/var/log/mosdns.log';
+	}
+
+	let content = readfile(configfile);
+	if (content) {
+		let lines = split(content, /\r?\n/);
+		let in_log = false;
+
+		for (let i = 0; i < length(lines); i++) {
+			let line = lines[i];
+
+			if (!in_log) {
+				if (match(line, /^log:\s*$/)) {
+					in_log = true;
+				}
+				continue;
+			}
+
+			if (match(line, /^[^ \t]/)) {
+				break;
+			}
+
+			let m = match(line, /^[ \t]+file:\s*(.+)\s*$/);
 			if (m && m[1]) {
 				let log_path = m[1];
 				log_path = replace(log_path, /^\s+|\s+$/g, '');
 				log_path = replace(log_path, /^["']|["']$/g, '');
-				if (log_path != "") {
+				if (substr(log_path, 0, 1) == '/') {
 					return log_path;
 				}
 			}
 		}
-		return '/var/log/mosdns.log';
 	}
+
+	return '/var/log/mosdns.log';
+}
+
+// Log RPCs deliberately have a narrower scope than arbitrary administrator
+// YAML. Resolve symlinks before opening and verify the opened inode before use.
+function open_log_file(mode) {
+	let requested = get_logfile_path_internal();
+	if (type(requested) != 'string' || !(index(requested, '/var/log/') === 0 || index(requested, '/tmp/log/') === 0))
+		die('Log access is limited to regular files under /var/log or /tmp/log.');
+	let path = realpath(requested);
+	if (!path || !(index(path, '/var/log/') === 0 || index(path, '/tmp/log/') === 0))
+		die('Log path is missing or resolves outside the allowed log directories.');
+	let info = stat(path);
+	if (!info || info.type != 'file') die('Log path is not a regular file.');
+	// r+ does not truncate; verify the descriptor before any destructive action.
+	let file = open(path, mode);
+	if (!file) die('Could not open the log file.');
+	let opened = stat('/proc/self/fd/' + file.fileno());
+	if (!opened || opened.type != 'file' || opened.inode != info.inode ||
+		opened.dev.major != info.dev.major || opened.dev.minor != info.dev.minor) {
+		file.close();
+		die('Log file changed while opening; retry the operation.');
+	}
+	return { file: file, size: opened.size };
 }
 
 function parse_json_safe(str) {
@@ -69,14 +111,23 @@ function parse_json_safe(str) {
 	}
 }
 
+function shell_quote(value) {
+	return "'" + replace('' + value, /'/g, "'\"'\"'") + "'";
+}
+
+function api_port(value) {
+	return match('' + value, /^[0-9]{1,5}$/) && +value > 0 && +value <= 65535;
+}
+
 function call_mosdns_api(endpoint, method) {
 	try {
 		let uci_cursor = cursor();
 		uci_cursor.load('mosdns');
 		let port = uci_cursor.get('mosdns', 'config', 'listen_port_api') || '9091';
+		if (!api_port(port)) return { error: 'Invalid API listen port.' };
 		let http_method = method ? method : 'GET';
 		let post_flag = (http_method === 'POST') ? '--post-data=""' : '';
-		let cmd = `wget -q -O - ${post_flag} "http://127.0.0.1:${port}/plugins/stats_collector${endpoint}"`;
+		let cmd = `wget -q -T 5 -O - ${post_flag} ${shell_quote("http://127.0.0.1:" + port + "/plugins/stats_collector" + endpoint)}`;
 		let res = exec_sys(cmd);
 		if (res.code === 0 && res.stdout != "") {
 			let json_val = parse_json_safe(res.stdout);
@@ -84,7 +135,7 @@ function call_mosdns_api(endpoint, method) {
 		}
 		return { error: "MosDNS API unreachable" };
 	} catch (e) {
-		return { error: String(e) };
+		return { error: ('' + e) };
 	}
 }
 
@@ -173,7 +224,103 @@ function get_client_leases() {
 	return leases;
 }
 
+// Staged rule files are immutable: callers publish the returned pointer only
+// after this method succeeds. No UCI state is changed by a failed file write.
+function write_rule_file(args) {
+	let section = args?.section;
+	let content = args?.content;
+	if (type(section) != 'string' || !match(section, /^[A-Za-z0-9_]{1,64}$/))
+		return { success: false, error: 'Invalid section identifier.' };
+	if (type(content) != 'string' || length(content) > 1048576 || index(content, '\x00') >= 0)
+		return { success: false, error: 'Rule content must be text of at most 1 MiB.' };
+	let tmp = exec_sys('mkdir -p /etc/mosdns/rule && mktemp -d /etc/mosdns/rule/.write-XXXXXX');
+	if (tmp.code !== 0 || !match(tmp.stdout, /^\/etc\/mosdns\/rule\/\.write-[A-Za-z0-9]+$/))
+		return { success: false, error: 'Could not create rule staging directory.' };
+	let staging = tmp.stdout + '/content';
+	let target = '/etc/mosdns/rule/' + section + '-' + substr(tmp.stdout, length('/etc/mosdns/rule/.write-')) + '.txt';
+	let error = null;
+	try {
+		let written = writefile(staging, content);
+		if (written !== length(content) || readfile(staging) !== content)
+			error = 'Rule write failed verification; configuration was not changed.';
+		else if (stat(target) || !rename(staging, target))
+			error = 'Could not publish rule file; configuration was not changed.';
+	} catch (e) {
+		error = '' + e;
+	}
+	unlink(staging);
+	rmdir(tmp.stdout);
+	if (error) return { success: false, error: error };
+	return { success: true, rule_file: target };
+}
+
+function read_rule_file(args) {
+	let name = args?.name || '';
+	if (type(name) != 'string') return { success: false, error: 'Invalid rule filename.' };
+	if (!name) return { success: true, content: '', rule_file: '' };
+	let path = substr(name, 0, 1) == '/' ? name : '/etc/mosdns/rule/' + name;
+	path = realpath(path);
+	if (!path || !(index(path, '/etc/mosdns/rule/') === 0 || index(path, '/var/mosdns/') === 0 || index(path, '/tmp/mosdns/') === 0))
+		return { success: false, error: 'Rule file is outside the managed rule directories or is missing.' };
+	let info = stat(path);
+	if (!info || info.type != 'file' || info.size > 1048576)
+		return { success: false, error: 'Rule file is not a regular file of at most 1 MiB.' };
+	let content = readfile(path);
+	if (content === null) return { success: false, error: 'Could not read rule file.' };
+	return { success: true, content: content, rule_file: path };
+}
+
 const methods = {
+	write_custom_config: {
+		args: { content: '' },
+		call: function(request) {
+			let content = request?.args?.content;
+			if (type(content) != 'string' || length(content) > 1048576 || index(content, '\x00') >= 0)
+				return { success: false, error: 'Configuration must be text of at most 1 MiB.' };
+			let target = '/etc/mosdns/config_custom.yaml';
+			let original = readfile(target);
+			if (original === null) return { success: false, error: 'Could not read existing custom configuration.' };
+			let tmp = exec_sys('mktemp -d /etc/mosdns/.yaml-backup-XXXXXX');
+			if (tmp.code !== 0 || !match(tmp.stdout, /^\/etc\/mosdns\/\.yaml-backup-[A-Za-z0-9]+$/))
+				return { success: false, error: 'Could not prepare configuration backup.' };
+			let backup = tmp.stdout + '/config_custom.yaml';
+			let staging = tmp.stdout + '/candidate';
+			if (writefile(backup, original) !== length(original) || readfile(backup) !== original ||
+				writefile(staging, content) !== length(content) || readfile(staging) !== content || !chmod(staging, 0600) || !rename(staging, target)) {
+				unlink(staging);
+				return { success: false, error: 'Configuration write failed; original was preserved.' };
+			}
+			// LuCI saves this before committing its UCI mode fields. Standard Save &
+			// Apply performs validation/reload after those fields are committed.
+			return { success: true, backup: backup };
+		}
+	},
+	restore_rule_defaults: {
+		args: { keep_groups: false },
+		call: function(request) {
+			let command = request?.args?.keep_groups ? 'restore_rule_defaults_keep_groups' : 'restore_rule_defaults';
+			let res = exec_sys('/usr/share/mosdns/mosdns.uc ' + command);
+			return { success: res.code === 0, error: res.code === 0 ? '' : res.stdout, message: res.stdout };
+		}
+	},
+	get_apply_status: {
+		call: function() {
+			let status = parse_json_safe(readfile('/var/run/mosdns/apply-status.json'));
+			if (status && status.success === false) {
+				let detail = readfile('/var/run/mosdns/apply-error.log');
+				if (detail) status.error = (status.error || '') + '\n' + substr(detail, 0, 4096);
+			}
+			return type(status) == 'object' ? status : { success: false, error: 'No apply result is available yet.', phase: 'unknown' };
+		}
+	},
+	read_rule_file: {
+		args: { name: '' },
+		call: function(request) { return read_rule_file(request?.args); }
+	},
+	write_rule_file: {
+		args: { section: '', content: '' },
+		call: function(request) { return write_rule_file(request?.args); }
+	},
 	get_stats: {
 		call: function() {
 			return call_mosdns_api('/api/v1/stats', 'GET');
@@ -225,35 +372,21 @@ const methods = {
 
 	flush_cache: {
 		call: function() {
-			try {
-				let uci_cursor = cursor();
-				uci_cursor.load('mosdns');
-				let port = uci_cursor.get('mosdns', 'config', 'listen_port_api') || '9091';
-				if (!port) return { error: "API listen port not configured." };
-
-				let res = exec_sys(`wget -q -O - "http://127.0.0.1:${port}/plugins/lazy_cache/flush"`);
-				if (res.code === 0) {
-					return { success: true };
-				} else {
-					return { success: false, error: res.stdout };
-				}
-			} catch (e) {
-				return { error: String(e) };
-			}
+			let res = exec_sys('/etc/init.d/mosdns flush_cache');
+			return { success: res.code === 0, error: res.code === 0 ? '' : res.stdout };
 		}
 	},
 
 	print_log: {
 		call: function() {
 			try {
-				let path = get_logfile_path_internal();
-				if (path && stat(path)) {
-					return { log: readfile(path) };
-				} else {
-					return { error: 'Log file not accessible or does not exist.' };
-				}
+				let opened = open_log_file('r');
+				let log = opened.file.read(262144);
+				opened.file.close();
+				if (log === null && opened.size > 0) return { error: 'Could not read the log file.' };
+				return { log: log || '', truncated: opened.size > 262144 };
 			} catch (e) {
-				return { error: String(e) };
+				return { error: '' + e };
 			}
 		}
 	},
@@ -261,19 +394,12 @@ const methods = {
 	clean_log: {
 		call: function() {
 			try {
-				let path = get_logfile_path_internal();
-				if (path) {
-					let f = open(path, 'w');
-					if (f) {
-						f.close();
-						return { success: true };
-					}
-					return { error: 'Failed to open log file for writing.' };
-				} else {
-					return { error: 'Log file path could not be determined.' };
-				}
+				let opened = open_log_file('r+');
+				let ok = opened.file.truncate(0);
+				opened.file.close();
+				return { success: !!ok, error: ok ? '' : 'Could not truncate the log file.' };
 			} catch (e) {
-				return { error: String(e) };
+				return { success: false, error: '' + e };
 			}
 		}
 	},
@@ -299,7 +425,7 @@ const methods = {
 				exec_sys('/usr/share/mosdns/mosdns.uc update > /var/log/mosdns_update.log 2>&1 &');
 				return { success: true };
 			} catch (e) {
-				return { success: false, error: String(e) };
+				return { success: false, error: ('' + e) };
 			}
 		}
 	},
@@ -313,7 +439,7 @@ const methods = {
 					return { log: '' };
 				}
 			} catch (e) {
-				return { error: String(e) };
+				return { error: ('' + e) };
 			}
 		}
 	}

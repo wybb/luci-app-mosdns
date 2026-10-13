@@ -1,0 +1,179 @@
+From: mosdns v2 rebuild
+Subject: [PATCH] publish launcher PID readiness for custom configurations
+
+MOSDNS_READY_FILE optionally publishes an atomic 0600 PID marker only after
+all plugins initialize. Publication failure aborts startup. Shutdown removes
+only the marker still containing this process PID. Unset means no change.
+
+--- a/coremain/mosdns.go
++++ b/coremain/mosdns.go
+@@ -98,6 +98,11 @@
+ 		return nil, err
+ 	}
+ 	m.logger.Info("all plugins are loaded")
++	if err := m.publishReadyFile(); err != nil {
++		m.sc.SendCloseSignal(err)
++		_ = m.sc.WaitClosed()
++		return nil, err
++	}
+ 	m.ready.Store(true)
+ 
+ 	// Publish HTTP routes only after all plugins finished registering them.
+--- /dev/null
++++ b/coremain/ready_file.go
+@@ -0,0 +1,72 @@
++package coremain
++
++import (
++	"fmt"
++	"os"
++	"path/filepath"
++	"strconv"
++	"sync"
++)
++
++// publishReadyFile supplies readiness for custom configurations without an API.
++// The launcher owns this opt-in path. Parent directory symlinks are supported
++// for OpenWrt layouts, but the final path must be regular or absent.
++func (m *Mosdns) publishReadyFile() error {
++	path := os.Getenv("MOSDNS_READY_FILE")
++	if path == "" {
++		return nil
++	}
++	pid := strconv.Itoa(os.Getpid()) + "\n"
++	var mu sync.Mutex
++	published := false
++	mu.Lock()
++	defer mu.Unlock()
++	// Install cleanup before publication so a concurrent close cannot leave a
++	// marker behind. The mutex also prevents cleanup racing the atomic rename.
++	m.sc.Attach(func(done func(), closed <-chan struct{}) {
++		defer done()
++		<-closed
++		mu.Lock()
++		defer mu.Unlock()
++		if !published {
++			return
++		}
++		info, err := os.Lstat(path)
++		if err != nil || !info.Mode().IsRegular() {
++			return
++		}
++		data, err := os.ReadFile(path)
++		if err == nil && string(data) == pid {
++			_ = os.Remove(path)
++		}
++	})
++	select {
++	case <-m.sc.ReceiveCloseSignal():
++		return fmt.Errorf("cannot publish readiness during shutdown")
++	default:
++	}
++	if info, err := os.Lstat(path); err == nil {
++		if !info.Mode().IsRegular() {
++			return fmt.Errorf("unsafe readiness marker path %s", path)
++		}
++	} else if !os.IsNotExist(err) {
++		return fmt.Errorf("inspect readiness marker: %w", err)
++	}
++	f, err := os.CreateTemp(filepath.Dir(path), ".mosdns-ready-*")
++	if err != nil {
++		return fmt.Errorf("create readiness marker: %w", err)
++	}
++	defer os.Remove(f.Name())
++	defer f.Close()
++	if _, err := f.WriteString(pid); err != nil {
++		return fmt.Errorf("write readiness marker: %w", err)
++	}
++	if err := f.Close(); err != nil {
++		return fmt.Errorf("close readiness marker: %w", err)
++	}
++	if err := os.Rename(f.Name(), path); err != nil {
++		return fmt.Errorf("publish readiness marker: %w", err)
++	}
++	published = true
++	return nil
++}
+--- /dev/null
++++ b/coremain/ready_file_test.go
+@@ -0,0 +1,80 @@
++package coremain
++
++import (
++	"errors"
++	"os"
++	"path/filepath"
++	"strconv"
++	"testing"
++)
++
++func TestReadyFileSuccessAndOwnedCleanup(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "ready.pid")
++	t.Setenv("MOSDNS_READY_FILE", path)
++	m, err := NewMosdns(&Config{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	data, err := os.ReadFile(path)
++	if err != nil || string(data) != strconv.Itoa(os.Getpid())+"\n" {
++		t.Fatalf("wrong PID marker %q: %v", data, err)
++	}
++	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0600 {
++		t.Fatal("marker permissions", info, err)
++	}
++	m.CloseWithErr(nil)
++	if err := m.GetSafeClose().WaitClosed(); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := os.Stat(path); !os.IsNotExist(err) {
++		t.Fatal("owned marker not removed", err)
++	}
++}
++
++func TestReadyFilePreservesReplacement(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "ready.pid")
++	t.Setenv("MOSDNS_READY_FILE", path)
++	m, err := NewMosdns(&Config{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(path, []byte("another-pid\n"), 0600); err != nil {
++		t.Fatal(err)
++	}
++	m.CloseWithErr(nil)
++	_ = m.GetSafeClose().WaitClosed()
++	if data, err := os.ReadFile(path); err != nil || string(data) != "another-pid\n" {
++		t.Fatal("replacement marker removed", err)
++	}
++}
++
++func TestReadyFileNotPublishedForFailedPlugin(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "ready.pid")
++	t.Setenv("MOSDNS_READY_FILE", path)
++	const kind = "test_ready_file_failure"
++	RegNewPluginFunc(kind, func(_ *BP, _ any) (any, error) {
++		if _, err := os.Stat(path); !os.IsNotExist(err) {
++			t.Error("marker exists during initialization")
++		}
++		return nil, errors.New("invalid plugin")
++	}, func() any { return new(struct{}) })
++	defer DelPluginType(kind)
++	if _, err := NewMosdns(&Config{Plugins: []PluginConfig{{Tag: "probe", Type: kind}}}); err == nil {
++		t.Fatal("bad plugin succeeded")
++	}
++	if _, err := os.Stat(path); !os.IsNotExist(err) {
++		t.Fatal("failed plugin published readiness")
++	}
++}
++
++func TestReadyFilePublicationFailureFailsStartup(t *testing.T) {
++	root := t.TempDir()
++	path := filepath.Join(root, "missing-parent", "ready.pid")
++	t.Setenv("MOSDNS_READY_FILE", path)
++	if _, err := NewMosdns(&Config{}); err == nil {
++		t.Fatal("publication failure did not fail startup")
++	}
++	if _, err := os.Stat(path); !os.IsNotExist(err) {
++		t.Fatal("unexpected marker", err)
++	}
++}

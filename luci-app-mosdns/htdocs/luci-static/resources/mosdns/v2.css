@@ -1,0 +1,9 @@
+/* Scoped to MosDNS: retain LuCI's table layout and scroll its own section. */
+.mosdns-v2 { min-width: 0; max-width: 100%; }
+.mosdns-v2 .cbi-tblsection { max-width: 100%; overflow-x: auto; }
+.mosdns-v2 .cbi-section-table .td { min-width: 5rem; overflow-wrap: anywhere; }
+.mosdns-v2 .cbi-section-actions { white-space: nowrap; }
+@media (max-width: 600px) {
+  .mosdns-v2 .cbi-section-table { min-width: 48rem; }
+  .mosdns-v2 .cbi-tblsection { -webkit-overflow-scrolling: touch; }
+}

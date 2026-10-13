@@ -24,7 +24,7 @@ let logTextarea;
 
 function pollLog() {
 	return callPrintLog().then(res => {
-		logTextarea.value = res.log || _('No log data.');
+		logTextarea.value = res.error ? _('Unable to read log: ') + res.error : (res.truncated ? _('Showing only the first 256 KiB of this log.') + '\n\n' : '') + (res.log || _('No log data.'));
 
 		if (!userScrolled) {
 			logTextarea.scrollTop = logTextarea.scrollHeight;

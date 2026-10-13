@@ -1,0 +1,165 @@
+From: mosdns v2 rebuild
+Subject: [PATCH] publish readiness only after successful plugin initialization
+
+Expose /ready with 503 during initialization or shutdown and 200 only after
+all plugins load. Start the HTTP API after route registration completes.
+
+--- a/coremain/mosdns.go
++++ b/coremain/mosdns.go
+@@ -33,10 +33,12 @@
+ 	"io"
+ 	"net/http"
+ 	"net/http/pprof"
++	"sync/atomic"
+ )
+ 
+ type Mosdns struct {
+ 	logger *zap.Logger // non-nil logger.
++	ready  atomic.Bool
+ 
+ 	// Plugins
+ 	plugins map[string]any
+@@ -63,28 +65,6 @@
+ 	}
+ 	// This must be called after m.httpMux and m.metricsReg been set.
+ 	m.initHttpMux()
+-
+-	// Start http api server
+-	if httpAddr := cfg.API.HTTP; len(httpAddr) > 0 {
+-		httpServer := &http.Server{
+-			Addr:    httpAddr,
+-			Handler: m.httpMux,
+-		}
+-		m.sc.Attach(func(done func(), closeSignal <-chan struct{}) {
+-			defer done()
+-			errChan := make(chan error, 1)
+-			go func() {
+-				m.logger.Info("starting api http server", zap.String("addr", httpAddr))
+-				errChan <- httpServer.ListenAndServe()
+-			}()
+-			select {
+-			case err := <-errChan:
+-				m.sc.SendCloseSignal(err)
+-			case <-closeSignal:
+-				_ = httpServer.Close()
+-			}
+-		})
+-	}
+ 
+ 	// Load plugins.
+ 
+@@ -118,6 +98,30 @@
+ 		return nil, err
+ 	}
+ 	m.logger.Info("all plugins are loaded")
++	m.ready.Store(true)
++
++	// Publish HTTP routes only after all plugins finished registering them.
++	// Start http api server
++	if httpAddr := cfg.API.HTTP; len(httpAddr) > 0 {
++		httpServer := &http.Server{
++			Addr:    httpAddr,
++			Handler: m.httpMux,
++		}
++		m.sc.Attach(func(done func(), closeSignal <-chan struct{}) {
++			defer done()
++			errChan := make(chan error, 1)
++			go func() {
++				m.logger.Info("starting api http server", zap.String("addr", httpAddr))
++				errChan <- httpServer.ListenAndServe()
++			}()
++			select {
++			case err := <-errChan:
++				m.sc.SendCloseSignal(err)
++			case <-closeSignal:
++				_ = httpServer.Close()
++			}
++		})
++	}
+ 
+ 	return m, nil
+ }
+@@ -174,6 +178,22 @@
+ 
+ // initHttpMux initializes api entries. It MUST be called after m.metricsReg being initialized.
+ func (m *Mosdns) initHttpMux() {
++	m.httpMux.Get("/ready", func(w http.ResponseWriter, r *http.Request) {
++		select {
++		case <-m.sc.ReceiveCloseSignal():
++			http.Error(w, "shutting down", http.StatusServiceUnavailable)
++			return
++		default:
++		}
++		if !m.ready.Load() {
++			http.Error(w, "initializing", http.StatusServiceUnavailable)
++			return
++		}
++		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
++		w.WriteHeader(http.StatusOK)
++		_, _ = io.WriteString(w, "ready\n")
++	})
++
+ 	// Register metrics.
+ 	m.httpMux.Method(http.MethodGet, "/metrics", promhttp.HandlerFor(m.metricsReg, promhttp.HandlerOpts{}))
+ 
+--- /dev/null
++++ b/coremain/readiness_test.go
+@@ -0,0 +1,58 @@
++package coremain
++
++import (
++	"errors"
++	"net/http"
++	"net/http/httptest"
++	"testing"
++)
++
++func readinessCode(m *Mosdns) int {
++	r := httptest.NewRecorder()
++	m.GetAPIRouter().ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/ready", nil))
++	return r.Code
++}
++
++func TestReadinessRequiresAllPluginsAndRejectsShutdown(t *testing.T) {
++	const kind = "test_readiness_success"
++	RegNewPluginFunc(kind, func(bp *BP, _ any) (any, error) {
++		if code := readinessCode(bp.M()); code != http.StatusServiceUnavailable {
++			t.Errorf("ready during plugin initialization: %d", code)
++		}
++		return struct{}{}, nil
++	}, func() any { return new(struct{}) })
++	defer DelPluginType(kind)
++	m, err := NewMosdns(&Config{Plugins: []PluginConfig{{Tag: "probe", Type: kind}}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if code := readinessCode(m); code != http.StatusOK {
++		t.Fatalf("loaded instance not ready: %d", code)
++	}
++	m.CloseWithErr(nil)
++	if code := readinessCode(m); code != http.StatusServiceUnavailable {
++		t.Fatalf("closed instance ready: %d", code)
++	}
++	if err := m.GetSafeClose().WaitClosed(); err != nil {
++		t.Fatal(err)
++	}
++}
++
++func TestReadinessNeverSucceedsAfterPluginFailure(t *testing.T) {
++	const kind = "test_readiness_failure"
++	var partial *Mosdns
++	RegNewPluginFunc(kind, func(bp *BP, _ any) (any, error) {
++		partial = bp.M()
++		return nil, errors.New("invalid rule fixture")
++	}, func() any { return new(struct{}) })
++	defer DelPluginType(kind)
++	if _, err := NewMosdns(&Config{Plugins: []PluginConfig{{Tag: "probe", Type: kind}}}); err == nil {
++		t.Fatal("invalid plugin unexpectedly loaded")
++	}
++	if partial == nil {
++		t.Fatal("fixture plugin was not invoked")
++	}
++	if code := readinessCode(partial); code != http.StatusServiceUnavailable {
++		t.Fatalf("failed instance ready: %d", code)
++	}
++}

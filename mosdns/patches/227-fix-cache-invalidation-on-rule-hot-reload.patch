@@ -1,0 +1,731 @@
+From: mosdns v2 rebuild
+Subject: [PATCH] fence cache entries and dumps across successful rule reloads
+
+Keep live rule replacement, but serialize successful publication with cache
+access and reject results started under an earlier generation. Flush every
+cache and invalidate persistent dumps on publication. Normal, lazy and
+prefetch work all retain their original generation.
+
+Startup dump provenance remains the service launcher responsibility; legacy
+dumps are accepted only before the first live publication in this process.
+
+--- a/pkg/query_context/context.go
++++ b/pkg/query_context/context.go
+@@ -21,6 +21,7 @@
+ 
+ import (
+ 	"fmt"
++	"github.com/IrineSistiana/mosdns/v5/pkg/rule_state"
+ 	"sync/atomic"
+ 	"time"
+ 
+@@ -58,8 +59,10 @@
+ // Context is a query context that pass through plugins.
+ // All Context funcs are not safe for concurrent use.
+ type Context struct {
+-	id        uint32
+-	startTime time.Time
++	// RuleGeneration is preserved by copies, including fallback and lazy refresh.
++	RuleGeneration uint64
++	id             uint32
++	startTime      time.Time
+ 
+ 	// ServerMeta contains some meta info from the server.
+ 	// It is read-only.
+@@ -128,10 +131,11 @@
+ // NewContext takes the ownership of q.
+ func NewContext(q *dns.Msg) *Context {
+ 	ctx := &Context{
+-		id:        contextUid.Add(1),
+-		startTime: time.Now(),
+-		query:     q,
+-		clientOpt: addNewAndSwapOldOpt(q),
++		RuleGeneration: rule_state.Generation(),
++		id:             contextUid.Add(1),
++		startTime:      time.Now(),
++		query:          q,
++		clientOpt:      addNewAndSwapOldOpt(q),
+ 	}
+ 	if ctx.clientOpt != nil {
+ 		ctx.respOpt = newOpt()
+@@ -238,6 +242,7 @@
+ // CopyTo deep copies this Context to d.
+ // Note that values that stored by StoreValue is not deep-copied.
+ func (ctx *Context) CopyTo(d *Context) *Context {
++	d.RuleGeneration = ctx.RuleGeneration
+ 	d.id = ctx.id
+ 	d.startTime = ctx.startTime
+ 
+--- /dev/null
++++ b/pkg/rule_state/state.go
+@@ -0,0 +1,53 @@
++// Package rule_state serializes successful rule publication with cache access.
++package rule_state
++
++import "sync"
++
++var state = struct {
++	sync.RWMutex
++	generation   uint64
++	next         uint64
++	invalidators map[uint64]func()
++}{invalidators: make(map[uint64]func())}
++
++// Generation identifies the rules under which a query started.
++func Generation() uint64 {
++	state.RLock()
++	defer state.RUnlock()
++	return state.generation
++}
++
++// Read holds a short read transaction. Never call Read recursively, or execute
++// a query chain under this lock: chains can recursively invoke other caches.
++func Read(f func(uint64)) {
++	state.RLock()
++	defer state.RUnlock()
++	f(state.generation)
++}
++
++// Publish installs an already validated matcher and invalidates every cache.
++// Parsing is deliberately done by the caller before acquiring this lock.
++func Publish(install func()) {
++	state.Lock()
++	defer state.Unlock()
++	install()
++	state.generation++
++	for _, invalidate := range state.invalidators {
++		invalidate()
++	}
++}
++
++// Register returns an unregister function. Callbacks run with the write lock
++// held and must not call back into this package.
++func Register(invalidate func()) func() {
++	state.Lock()
++	state.next++
++	id := state.next
++	state.invalidators[id] = invalidate
++	state.Unlock()
++	return func() {
++		state.Lock()
++		delete(state.invalidators, id)
++		state.Unlock()
++	}
++}
+--- /dev/null
++++ b/pkg/rule_state/state_test.go
+@@ -0,0 +1,25 @@
++package rule_state
++
++import "testing"
++
++func TestPublicationAndUnregister(t *testing.T) {
++	before := Generation()
++	installed, invalidated := false, false
++	unregister := Register(func() {
++		if !installed {
++			t.Error("invalidated before publication")
++		}
++		invalidated = true
++	})
++	Publish(func() { installed = true })
++	if !invalidated || Generation() != before+1 {
++		t.Fatal("publication failed")
++	}
++	unregister()
++	unregister()
++	invalidated = false
++	Publish(func() {})
++	if invalidated {
++		t.Fatal("closed cache still registered")
++	}
++}
+--- a/pkg/utils/file_watcher.go
++++ b/pkg/utils/file_watcher.go
+@@ -2,12 +2,14 @@
+ 
+ import (
+ 	"os"
++	"sync"
+ 	"time"
+ )
+ 
+ // FileWatcher periodically checks the modification time of the specified files.
+ type FileWatcher struct {
+-	done chan struct{}
++	done      chan struct{}
++	closeOnce sync.Once
+ }
+ 
+ // StartFileWatcher starts a new FileWatcher that checks files every 'interval'.
+@@ -49,7 +51,7 @@
+ 						}
+ 						continue
+ 					}
+-					
++
+ 					if mt, ok := modTimes[f]; !ok || mt != stat.ModTime() {
+ 						modTimes[f] = stat.ModTime()
+ 						changedFiles = append(changedFiles, f)
+@@ -67,7 +69,7 @@
+ // Close stops the FileWatcher.
+ func (fw *FileWatcher) Close() error {
+ 	if fw != nil {
+-		close(fw.done)
++		fw.closeOnce.Do(func() { close(fw.done) })
+ 	}
+ 	return nil
+ }
+--- a/plugin/data_provider/adblock_set/adblock_set.go
++++ b/plugin/data_provider/adblock_set/adblock_set.go
+@@ -27,6 +27,7 @@
+ 
+ 	"github.com/IrineSistiana/mosdns/v5/coremain"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/matcher/domain"
++	"github.com/IrineSistiana/mosdns/v5/pkg/rule_state"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/utils"
+ 	"github.com/IrineSistiana/mosdns/v5/plugin/data_provider"
+ 	"go.uber.org/zap"
+@@ -110,7 +111,7 @@
+ 		ds.fw = utils.StartFileWatcher(args.Files, time.Second*3, func(changedFiles []string) {
+ 			newM, err := loadInner()
+ 			if err == nil {
+-				ds.matcher.Store(newM)
++				rule_state.Publish(func() { ds.matcher.Store(newM) })
+ 				bp.L().Info("reloaded adblock files", zap.Strings("files", changedFiles))
+ 			} else {
+ 				bp.L().Error("failed to reload adblock files", zap.Error(err))
+--- a/plugin/data_provider/domain_set/domain_set.go
++++ b/plugin/data_provider/domain_set/domain_set.go
+@@ -28,6 +28,7 @@
+ 
+ 	"github.com/IrineSistiana/mosdns/v5/coremain"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/matcher/domain"
++	"github.com/IrineSistiana/mosdns/v5/pkg/rule_state"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/utils"
+ 	"github.com/IrineSistiana/mosdns/v5/plugin/data_provider"
+ 	"go.uber.org/zap"
+@@ -113,7 +114,7 @@
+ 		ds.fw = utils.StartFileWatcher(args.Files, time.Second*3, func(changedFiles []string) {
+ 			newMg, err := loadInner()
+ 			if err == nil {
+-				ds.mg.Store(newMg)
++				rule_state.Publish(func() { ds.mg.Store(newMg) })
+ 				bp.L().Info("reloaded files", zap.Strings("files", changedFiles))
+ 			}
+ 		})
+--- a/plugin/data_provider/ip_set/ip_set.go
++++ b/plugin/data_provider/ip_set/ip_set.go
+@@ -30,6 +30,7 @@
+ 
+ 	"github.com/IrineSistiana/mosdns/v5/coremain"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/matcher/netlist"
++	"github.com/IrineSistiana/mosdns/v5/pkg/rule_state"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/utils"
+ 	"github.com/IrineSistiana/mosdns/v5/plugin/data_provider"
+ 	"go.uber.org/zap"
+@@ -109,7 +110,7 @@
+ 		p.fw = utils.StartFileWatcher(args.Files, time.Second*3, func(changedFiles []string) {
+ 			newMg, err := loadInner()
+ 			if err == nil {
+-				p.mg.Store(newMg)
++				rule_state.Publish(func() { p.mg.Store(newMg) })
+ 				bp.L().Info("reloaded files", zap.Strings("files", changedFiles))
+ 			}
+ 		})
+--- a/plugin/executable/arbitrary/arbitrary.go
++++ b/plugin/executable/arbitrary/arbitrary.go
+@@ -30,6 +30,7 @@
+ 
+ 	"github.com/IrineSistiana/mosdns/v5/coremain"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/query_context"
++	"github.com/IrineSistiana/mosdns/v5/pkg/rule_state"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/utils"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/zone_file"
+ 	"github.com/IrineSistiana/mosdns/v5/plugin/executable/sequence"
+@@ -86,7 +87,7 @@
+ 		a.fw = utils.StartFileWatcher(args.Files, time.Second*3, func(changedFiles []string) {
+ 			newInner, err := loadInner()
+ 			if err == nil {
+-				a.m.Store(newInner)
++				rule_state.Publish(func() { a.m.Store(newInner) })
+ 				bp.L().Info("reloaded files", zap.Strings("files", changedFiles))
+ 			}
+ 		})
+--- a/plugin/executable/cache/cache.go
++++ b/plugin/executable/cache/cache.go
+@@ -20,6 +20,7 @@
+ package cache
+ 
+ import (
++	"bytes"
+ 	"context"
+ 	"encoding/binary"
+ 	"errors"
+@@ -36,6 +37,7 @@
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/cache"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/pool"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/query_context"
++	"github.com/IrineSistiana/mosdns/v5/pkg/rule_state"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/utils"
+ 	"github.com/IrineSistiana/mosdns/v5/plugin/executable/sequence"
+ 	"github.com/go-chi/chi/v5"
+@@ -88,7 +90,9 @@
+ }
+ 
+ type Cache struct {
+-	args *Args
++	args            *Args
++	unregisterRules func()
++	dumpMu          sync.Mutex
+ 
+ 	logger       *zap.Logger
+ 	backend      *cache.Cache[key, *item]
+@@ -191,6 +195,16 @@
+ 		}),
+ 	}
+ 
++	p.unregisterRules = rule_state.Register(func() {
++		p.backend.Flush()
++		p.updatedKey.Add(minimumChangesToDump)
++		if p.args.DumpFile != "" {
++			if err := os.Remove(p.args.DumpFile); err != nil && !os.IsNotExist(err) {
++				p.logger.Error("failed to invalidate rule-dependent cache dump", zap.Error(err))
++			}
++		}
++	})
++
+ 	if err := p.loadDump(); err != nil {
+ 		p.logger.Error("failed to load cache dump", zap.Error(err))
+ 	}
+@@ -225,7 +239,13 @@
+ 		return next.ExecNext(ctx, qCtx)
+ 	}
+ 
+-	cachedResp, lazyHit := getRespFromCache(msgKey, c.backend, c.args.LazyCacheTTL > 0, expiredMsgTtl)
++	var cachedResp *dns.Msg
++	var lazyHit bool
++	rule_state.Read(func(generation uint64) {
++		if generation == qCtx.RuleGeneration {
++			cachedResp, lazyHit = getRespFromCache(msgKey, c.backend, c.args.LazyCacheTTL > 0, expiredMsgTtl)
++		}
++	})
+ 	if lazyHit {
+ 		c.lazyHitTotal.Inc()
+ 		c.doLazyUpdate(msgKey, qCtx, next)
+@@ -254,7 +274,7 @@
+ 	err := next.ExecNext(ctx, qCtx)
+ 
+ 	if r := qCtx.R(); r != nil && cachedResp != r { // pointer compare. r is not cachedResp
+-		saveRespToCache(msgKey, r, c.backend, c.args.LazyCacheTTL)
++		c.saveForGeneration(qCtx.RuleGeneration, msgKey, r)
+ 		c.updatedKey.Add(1)
+ 	}
+ 	return err
+@@ -276,13 +296,13 @@
+ 
+ 		r := qCtxCopy.R()
+ 		if r != nil {
+-			saveRespToCache(msgKey, r, c.backend, c.args.LazyCacheTTL)
++			c.saveForGeneration(qCtxCopy.RuleGeneration, msgKey, r)
+ 			c.updatedKey.Add(1)
+ 		}
+ 		c.logger.Debug("lazy cache updated", qCtxCopy.InfoField())
+ 		return nil, nil
+ 	}
+-	c.lazyUpdateSF.DoChan("lazy:"+msgKey, lazyUpdateFunc) // DoChan won't block this goroutine
++	c.lazyUpdateSF.DoChan(fmt.Sprintf("lazy:%d:%s", qCtxCopy.RuleGeneration, msgKey), lazyUpdateFunc) // DoChan won't block this goroutine
+ }
+ 
+ func (c *Cache) startPrefetchLoop() {
+@@ -297,6 +317,7 @@
+ 					continue
+ 				}
+ 
++				generation := rule_state.Generation()
+ 				now := time.Now()
+ 				_ = c.backend.Range(func(k key, v *item, cacheExpirationTime time.Time) error {
+ 					if v == nil || v.resp == nil || len(v.resp.Question) == 0 {
+@@ -304,7 +325,7 @@
+ 					}
+ 					remainingTTL := int(v.expirationTime.Sub(now).Seconds())
+ 					if remainingTTL >= 0 && remainingTTL < c.args.PrefetchBeforeExpire && v.hitCount.Load() >= uint32(c.args.PrefetchMinHits) {
+-						c.doPrefetch(string(k), v, remainingTTL, captured)
++						c.doPrefetch(string(k), v, remainingTTL, captured, generation)
+ 					}
+ 					return nil
+ 				})
+@@ -315,8 +336,8 @@
+ 	}()
+ }
+ 
+-func (c *Cache) doPrefetch(msgKey string, v *item, remainingTTL int, capturedNext *sequence.ChainWalker) {
+-	prefetchSFKey := "prefetch:" + msgKey
++func (c *Cache) doPrefetch(msgKey string, v *item, remainingTTL int, capturedNext *sequence.ChainWalker, generation uint64) {
++	prefetchSFKey := fmt.Sprintf("prefetch:%d:%s", generation, msgKey)
+ 	prefetchFunc := func() (any, error) {
+ 		if v.resp == nil || len(v.resp.Question) == 0 {
+ 			return nil, errors.New("invalid cached response: empty question")
+@@ -331,6 +352,7 @@
+ 		req.Id = dns.Id()
+ 		req.RecursionDesired = true
+ 		newQCtx := query_context.NewContext(req)
++		newQCtx.RuleGeneration = generation
+ 
+ 		c.logger.Debug("start proactive prefetch",
+ 			zap.String("qname", qname),
+@@ -350,7 +372,7 @@
+ 
+ 		r := newQCtx.R()
+ 		if r != nil {
+-			if saveRespToCache(msgKey, r, c.backend, c.args.LazyCacheTTL) {
++			if c.saveForGeneration(generation, msgKey, r) {
+ 				v.hitCount.Store(0)
+ 				c.prefetchTotal.Inc()
+ 				c.updatedKey.Add(1)
+@@ -369,6 +391,7 @@
+ 	}
+ 	c.closeOnce.Do(func() {
+ 		close(c.closeNotify)
++		c.unregisterRules()
+ 	})
+ 	return c.backend.Close()
+ }
+@@ -419,6 +442,14 @@
+ }
+ 
+ func (c *Cache) dumpCache() error {
++	c.dumpMu.Lock()
++	defer c.dumpMu.Unlock()
++	var err error
++	rule_state.Read(func(generation uint64) { err = c.dumpCacheLocked(generation) })
++	return err
++}
++
++func (c *Cache) dumpCacheLocked(generation uint64) error {
+ 	if len(c.args.DumpFile) == 0 {
+ 		return nil
+ 	}
+@@ -429,7 +460,7 @@
+ 	}
+ 	defer f.Close()
+ 
+-	en, err := c.writeDump(f)
++	en, err := c.writeDumpLocked(f, generation)
+ 	if err != nil {
+ 		return fmt.Errorf("failed to write dump, %w", err)
+ 	}
+@@ -461,10 +492,29 @@
+ }
+ 
+ func (c *Cache) writeDump(w io.Writer) (int, error) {
++	var n int
++	var err error
++	var snapshot bytes.Buffer
++	// Do not hold the rule barrier while streaming to an HTTP client.
++	rule_state.Read(func(generation uint64) { n, err = c.writeDumpLocked(&snapshot, generation) })
++	if err == nil {
++		_, err = snapshot.WriteTo(w)
++	}
++	return n, err
++}
++
++var dumpSession = strconv.FormatInt(time.Now().UnixNano(), 16)
++
++func dumpRuleStamp(generation uint64) string {
++	return fmt.Sprintf("%s:%d", dumpSession, generation)
++}
++
++func (c *Cache) writeDumpLocked(w io.Writer, generation uint64) (int, error) {
+ 	en := 0
+ 
+ 	gw, _ := gzip.NewWriterLevel(w, gzip.BestSpeed)
+ 	gw.Name = dumpHeader
++	gw.Comment = dumpRuleStamp(generation)
+ 
+ 	block := new(CacheDumpBlock)
+ 	writeBlock := func() error {
+@@ -527,10 +577,20 @@
+ // readDump reads dumped data from r. It returns the number of bytes read,
+ // number of entries read and any error encountered.
+ func (c *Cache) readDump(r io.Reader) (int, error) {
++	// An HTTP upload may block: fence each inserted entry rather than holding
++	// the rule barrier while reading untrusted input.
++	return c.readDumpGeneration(r, rule_state.Generation())
++}
++
++func (c *Cache) readDumpGeneration(r io.Reader, generation uint64) (int, error) {
+ 	en := 0
+ 	gr, err := gzip.NewReader(r)
+ 	if err != nil {
+ 		return en, fmt.Errorf("failed to read gzip header, %w", err)
++	}
++	defer gr.Close()
++	if generation != 0 && gr.Comment != dumpRuleStamp(generation) {
++		return 0, errors.New("cache dump belongs to an earlier rule generation")
+ 	}
+ 	if gr.Name != dumpHeader {
+ 		return en, fmt.Errorf("invalid or old cache dump, header is %s, want %s", gr.Name, dumpHeader)
+@@ -579,7 +639,16 @@
+ 				storedTime:     storedTime,
+ 				expirationTime: msgExpTime,
+ 			}
+-			c.backend.Store(key(entry.GetKey()), i, cacheExpTime)
++			stored := false
++			rule_state.Read(func(current uint64) {
++				if current == generation {
++					c.backend.Store(key(entry.GetKey()), i, cacheExpTime)
++					stored = true
++				}
++			})
++			if !stored {
++				return errors.New("rules changed while loading cache dump")
++			}
+ 		}
+ 		return nil
+ 	}
+@@ -599,3 +668,15 @@
+ 	}
+ 	return en, gr.Close()
+ }
++
++// saveForGeneration rejects foreground, lazy and prefetch work begun before a
++// successful rule reload. The check and store are atomic with publication.
++func (c *Cache) saveForGeneration(generation uint64, msgKey string, r *dns.Msg) bool {
++	saved := false
++	rule_state.Read(func(current uint64) {
++		if current == generation {
++			saved = saveRespToCache(msgKey, r, c.backend, c.args.LazyCacheTTL)
++		}
++	})
++	return saved
++}
+--- /dev/null
++++ b/plugin/executable/cache/hot_reload_test.go
+@@ -0,0 +1,188 @@
++package cache
++
++import (
++	"bytes"
++	"context"
++	"fmt"
++	"net"
++	"os"
++	"path/filepath"
++	"testing"
++	"time"
++
++	"github.com/IrineSistiana/mosdns/v5/pkg/query_context"
++	"github.com/IrineSistiana/mosdns/v5/pkg/rule_state"
++	"github.com/IrineSistiana/mosdns/v5/plugin/executable/sequence"
++	"github.com/miekg/dns"
++)
++
++type reloadAnswer func(context.Context, *query_context.Context) error
++
++func (f reloadAnswer) Exec(ctx context.Context, q *query_context.Context) error { return f(ctx, q) }
++
++func reloadQuery() *query_context.Context {
++	q := new(dns.Msg)
++	q.SetQuestion("reload.test.", dns.TypeA)
++	return query_context.NewContext(q)
++}
++
++func reloadResponse(q *dns.Msg) *dns.Msg {
++	r := new(dns.Msg)
++	r.SetReply(q)
++	r.Answer = []dns.RR{&dns.A{Hdr: dns.RR_Header{Name: "reload.test.", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 300}, A: net.IPv4(192, 0, 2, 1)}}
++	return r
++}
++
++func TestHotReloadFlushesAllCachesAndRejectsOldWrites(t *testing.T) {
++	a, b := NewCache(&Args{}, Opts{}), NewCache(&Args{}, Opts{})
++	defer a.Close()
++	defer b.Close()
++	q := reloadQuery()
++	k := getMsgKey(q.Q())
++	for _, c := range []*Cache{a, b} {
++		if !c.saveForGeneration(q.RuleGeneration, k, reloadResponse(q.Q())) {
++			t.Fatal("initial write rejected")
++		}
++	}
++	rule_state.Publish(func() {})
++	for _, c := range []*Cache{a, b} {
++		if c.backend.Len() != 0 {
++			t.Fatal("reload did not flush every cache")
++		}
++		if c.saveForGeneration(q.RuleGeneration, k, reloadResponse(q.Q())) {
++			t.Fatal("old generation accepted")
++		}
++		fresh := reloadQuery()
++		if !c.saveForGeneration(fresh.RuleGeneration, k, reloadResponse(fresh.Q())) {
++			t.Fatal("fresh generation rejected")
++		}
++	}
++	if q.Copy().RuleGeneration != q.RuleGeneration {
++		t.Fatal("copy changed query generation")
++	}
++}
++
++func TestHotReloadRejectsInflightForegroundLazyAndPrefetch(t *testing.T) {
++	for _, mode := range []string{"foreground", "lazy", "prefetch"} {
++		t.Run(mode, func(t *testing.T) {
++			c := NewCache(&Args{}, Opts{})
++			defer c.Close()
++			q := reloadQuery()
++			k := getMsgKey(q.Q())
++			entered, release := make(chan struct{}), make(chan struct{})
++			next := sequence.NewChainWalker([]*sequence.ChainNode{{E: reloadAnswer(func(_ context.Context, q *query_context.Context) error {
++				close(entered)
++				<-release
++				q.SetResponse(reloadResponse(q.Q()))
++				return nil
++			})}}, nil)
++			done := make(chan struct{})
++			switch mode {
++			case "foreground":
++				go func() { defer close(done); _ = c.Exec(context.Background(), q, next) }()
++			case "lazy":
++				c.doLazyUpdate(k, q, next)
++			case "prefetch":
++				v := &item{resp: reloadResponse(q.Q())}
++				c.doPrefetch(k, v, 1, &next, q.RuleGeneration)
++			}
++			select {
++			case <-entered:
++			case <-time.After(2 * time.Second):
++				t.Fatal("query did not start")
++			}
++			if mode != "foreground" {
++				// Join the active singleflight before releasing its response.
++				ch := c.lazyUpdateSF.DoChan(fmt.Sprintf("%s:%d:%s", mode, q.RuleGeneration, k), func() (any, error) { panic("refresh unexpectedly completed") })
++				go func() { <-ch; close(done) }()
++			}
++			rule_state.Publish(func() {})
++			close(release)
++			select {
++			case <-done:
++			case <-time.After(2 * time.Second):
++				t.Fatal("refresh did not finish")
++			}
++			if c.backend.Len() != 0 {
++				t.Fatal("in-flight stale response repopulated cache")
++			}
++		})
++	}
++}
++
++func TestHotReloadInvalidatesPersistedAndExportedDumps(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "cache.dump")
++	c := NewCache(&Args{DumpFile: path}, Opts{})
++	defer c.Close()
++	q := reloadQuery()
++	c.saveForGeneration(q.RuleGeneration, getMsgKey(q.Q()), reloadResponse(q.Q()))
++	var old bytes.Buffer
++	if _, err := c.writeDump(&old); err != nil {
++		t.Fatal(err)
++	}
++	if err := c.dumpCache(); err != nil {
++		t.Fatal(err)
++	}
++	rule_state.Publish(func() {})
++	if _, err := os.Stat(path); !os.IsNotExist(err) {
++		t.Fatalf("stale dump retained: %v", err)
++	}
++	if _, err := c.readDump(&old); err == nil {
++		t.Fatal("stale dump import accepted")
++	}
++	fresh := reloadQuery()
++	c.saveForGeneration(fresh.RuleGeneration, getMsgKey(fresh.Q()), reloadResponse(fresh.Q()))
++	var current bytes.Buffer
++	if _, err := c.writeDump(&current); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := c.readDump(&current); err != nil {
++		t.Fatalf("current dump rejected: %v", err)
++	}
++}
++
++type gatedDumpReader struct {
++	*bytes.Reader
++	entered chan struct{}
++	release chan struct{}
++	started bool
++}
++
++func (r *gatedDumpReader) Read(p []byte) (int, error) {
++	if !r.started {
++		r.started = true
++		close(r.entered)
++		<-r.release
++	}
++	return r.Reader.Read(p)
++}
++
++func TestHotReloadFencesSlowDumpUploadWithoutBlockingPublication(t *testing.T) {
++	c := NewCache(&Args{}, Opts{})
++	defer c.Close()
++	q := reloadQuery()
++	c.saveForGeneration(q.RuleGeneration, getMsgKey(q.Q()), reloadResponse(q.Q()))
++	var dump bytes.Buffer
++	if _, err := c.writeDump(&dump); err != nil {
++		t.Fatal(err)
++	}
++	r := &gatedDumpReader{Reader: bytes.NewReader(dump.Bytes()), entered: make(chan struct{}), release: make(chan struct{})}
++	done := make(chan error, 1)
++	go func() { _, err := c.readDump(r); done <- err }()
++	<-r.entered
++	published := make(chan struct{})
++	go func() { rule_state.Publish(func() {}); close(published) }()
++	select {
++	case <-published:
++	case <-time.After(2 * time.Second):
++		close(r.release)
++		t.Fatal("slow upload blocked rule publication")
++	}
++	close(r.release)
++	if err := <-done; err == nil {
++		t.Fatal("stale in-flight dump import accepted")
++	}
++	if c.backend.Len() != 0 {
++		t.Fatal("stale dump repopulated cache")
++	}
++}
+--- a/plugin/executable/hosts/hosts.go
++++ b/plugin/executable/hosts/hosts.go
+@@ -31,6 +31,7 @@
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/hosts"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/matcher/domain"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/query_context"
++	"github.com/IrineSistiana/mosdns/v5/pkg/rule_state"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/utils"
+ 	"github.com/IrineSistiana/mosdns/v5/plugin/executable/sequence"
+ 	"github.com/miekg/dns"
+@@ -92,7 +93,7 @@
+ 		h.fw = utils.StartFileWatcher(args.Files, time.Second*3, func(changedFiles []string) {
+ 			newInner, err := loadInner()
+ 			if err == nil {
+-				h.h.Store(newInner)
++				rule_state.Publish(func() { h.h.Store(newInner) })
+ 				bp.L().Info("reloaded files", zap.Strings("files", changedFiles))
+ 			}
+ 		})
+--- a/plugin/executable/redirect/redirect.go
++++ b/plugin/executable/redirect/redirect.go
+@@ -31,6 +31,7 @@
+ 	"github.com/IrineSistiana/mosdns/v5/coremain"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/matcher/domain"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/query_context"
++	"github.com/IrineSistiana/mosdns/v5/pkg/rule_state"
+ 	"github.com/IrineSistiana/mosdns/v5/pkg/utils"
+ 	"github.com/IrineSistiana/mosdns/v5/plugin/executable/sequence"
+ 	"github.com/miekg/dns"
+@@ -104,7 +105,7 @@
+ 		r.fw = utils.StartFileWatcher(args.Files, time.Second*3, func(changedFiles []string) {
+ 			newInner, err := loadInner()
+ 			if err == nil {
+-				r.m.Store(newInner)
++				rule_state.Publish(func() { r.m.Store(newInner) })
+ 				bp.L().Info("reloaded files", zap.Strings("files", changedFiles), zap.Int("length", newInner.Len()))
+ 			}
+ 		})

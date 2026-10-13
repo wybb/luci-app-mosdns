@@ -1,6 +1,5 @@
 'use strict';
 'require dom';
-'require fs';
 'require poll';
 'require rpc';
 'require ui';
@@ -49,8 +48,6 @@ let filterVal = 'all';
 let searchVal = '';
 let pageIdx = 0;
 const PAGE_SIZE = 20;
-const WHITELIST_FILE = '/etc/mosdns/rule/whitelist.txt';
-const BLOCKLIST_FILE = '/etc/mosdns/rule/blocklist.txt';
 let isUserPaused = false;
 
 let nodeStats;
@@ -631,123 +628,6 @@ const updateTopRankings = topData => {
 	dom.content(nodeTop, renderTopRankings(topData));
 };
 
-const promptAddRule = (rawDomain, actionType) => {
-	const cleanDomain = (rawDomain || '').replace(/\.+$/, '').trim().toLowerCase();
-	if (!cleanDomain) {
-		ui.addNotification(null, E('p', _('Domain name cannot be empty.')), 'warning');
-		return;
-	}
-
-	const isPermit = (actionType === 'permit' || actionType === 'allow' || actionType === 'whitelist');
-	const targetFile = isPermit ? WHITELIST_FILE : BLOCKLIST_FILE;
-	const targetName = isPermit ? _('White Lists') : _('Block Lists');
-	const opposingFile = isPermit ? BLOCKLIST_FILE : WHITELIST_FILE;
-	const opposingName = isPermit ? _('Block Lists') : _('White Lists');
-
-	const cleanRuleLine = l => {
-		let s = (l || '').trim().toLowerCase();
-		if (!s || s.startsWith('#')) return null;
-		s = s.replace(/^\|\|/, '').replace(/\^.*$/, '');
-		s = s.replace(/^(domain|full|keyword):/, '');
-		return s.replace(/\.+$/, '').trim();
-	};
-
-	const inputDomain = E('input', {
-		class: 'cbi-input-text',
-		type: 'text',
-		value: cleanDomain,
-		style: 'width: 100%; font-family: monospace; font-size: 0.95rem; margin-top: 0.5rem;'
-	});
-
-	const executeAddRule = () => {
-		const domainToAdd = inputDomain.value.replace(/\.+$/, '').trim().toLowerCase();
-		if (!domainToAdd) {
-			ui.addNotification(null, E('p', _('Domain name cannot be empty.')), 'warning');
-			return;
-		}
-
-		ui.hideModal();
-
-		fs.read(targetFile).then(content => {
-			const rawLines = (content || '').split(/\r?\n/);
-			const existingRules = rawLines.map(cleanRuleLine).filter(Boolean);
-			const alreadyInTarget = existingRules.includes(domainToAdd);
-
-			let appendPromise = Promise.resolve();
-			if (!alreadyInTarget) {
-				let newContent = (content || '').trimEnd();
-				if (newContent.length > 0) {
-					newContent += '\n' + domainToAdd + '\n';
-				} else {
-					newContent = '# MosDNS Rules\n' + domainToAdd + '\n';
-				}
-				appendPromise = fs.write(targetFile, newContent);
-			}
-
-			return appendPromise.then(() => {
-				return fs.read(opposingFile).then(oppContent => {
-					if (!oppContent) return;
-					const oppLines = oppContent.split(/\r?\n/);
-					let changed = false;
-					const filtered = oppLines.filter(l => {
-						const trimmed = l.trim().toLowerCase();
-						const cleaned = cleanRuleLine(l);
-						if (trimmed === domainToAdd || cleaned === domainToAdd) {
-							changed = true;
-							return false;
-						}
-						return true;
-					});
-					if (changed) {
-						let oppNew = filtered.join('\n').trimEnd();
-						if (oppNew.length > 0) oppNew += '\n';
-						return fs.write(opposingFile, oppNew);
-					}
-				});
-			});
-		}).catch(err => {
-			ui.addNotification(null, E('p', _('Failed to update rule file: %s').format(err.message)), 'error');
-		});
-	};
-
-	inputDomain.addEventListener('keydown', e => {
-		if (e.key === 'Enter') {
-			e.preventDefault();
-			executeAddRule();
-		}
-	});
-
-	const title = isPermit ? _('Add to Whitelist') : _('Add to Blocklist');
-	const btnClass = isPermit ? 'cbi-button-save' : 'cbi-button-reset';
-
-	ui.showModal(title, [
-		E('div', { style: 'padding: 0.5rem 0;' }, [
-			E('p', { style: 'margin-bottom: 0.5rem;' },
-				isPermit
-					? _('Add domain to the whitelist to permit DNS resolution:')
-					: _('Add domain to the blocklist to block DNS resolution:')
-			),
-			E('label', { style: 'font-weight: 600; font-size: 0.85rem;' }, _('Domain:')),
-			inputDomain,
-			E('p', { class: 'cbi-value-description', style: 'margin-top: 0.4rem; font-size: 0.8rem; opacity: 0.7;' },
-				_('Target file: %s (supports domain matching rules)').format(targetFile)
-			)
-		]),
-		E('div', { class: 'right', style: 'margin-top: 1.25rem; display: flex; justify-content: flex-end; gap: 0.5rem;' }, [
-			E('button', {
-				class: 'btn cbi-button cbi-button-neutral',
-				click: ui.hideModal
-			}, _('Cancel')),
-			E('button', {
-				class: 'btn cbi-button ' + btnClass,
-				click: executeAddRule
-			}, _('Confirm'))
-		])
-	]);
-
-	setTimeout(() => inputDomain.focus(), 100);
-};
-
 const showLogDetailsModal = item => {
 	let statusBadge;
 	if (item.is_blocked) {
@@ -821,21 +701,10 @@ const showLogDetailsModal = item => {
 	ui.showModal(_('Query Log Details'), [
 		body,
 		E('div', { class: 'right', style: 'margin-top: 1.25rem; display: flex; justify-content: space-between; align-items: center;' }, [
-			item.is_blocked ? E('button', {
-				class: 'btn cbi-button mosdns-action-btn btn-allow',
-				style: 'padding: 0.35rem 0.75rem !important; font-size: 0.82rem !important;',
-				click: () => {
-					ui.hideModal();
-					promptAddRule(item.domain, 'permit');
-				}
-			}, _('Permit')) : E('button', {
-				class: 'btn cbi-button mosdns-action-btn btn-block',
-				style: 'padding: 0.35rem 0.75rem !important; font-size: 0.82rem !important;',
-				click: () => {
-					ui.hideModal();
-					promptAddRule(item.domain, 'intercept');
-				}
-			}, _('Intercept')),
+			E('div', { class: 'cbi-value-description', style: 'max-width: 75%;' }, [
+				_('To permit or block this domain, edit the appropriate ordered rule. Statistics does not change rule files.'),
+				' ', E('a', { href: L.url('admin', 'services', 'mosdns', 'rules') }, _('Open routing rules'))
+			]),
 			E('button', {
 				class: 'btn cbi-button cbi-button-action',
 				click: ui.hideModal

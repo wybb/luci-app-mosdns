@@ -1,3 +1,5 @@
+> v2 redevelopment branch: architecture, migration, safety decisions and verification limits are documented in [docs/V2-REBUILD.md](docs/V2-REBUILD.md).
+
 # luci-app-mosdns
 
 [MosDNS](https://github.com/IrineSistiana/mosdns) is a plug-in DNS forwarder. Users can splicing plug-ins as needed to customize their own DNS processing logic.
@@ -85,30 +87,11 @@ plugins:
 
 --------------
 
-## How to install prebuilt packages
+## Installation of this development branch
 
-- Login OpenWrt terminal (SSH)
+Build the `mosdns` and `luci-app-mosdns` packages together using the matching OpenWrt/LEDE SDK. Back up `/etc/config/mosdns`, `/etc/mosdns`, and dnsmasq settings before installation. This branch requires its patched core; an unrelated upstream binary is not equivalent.
 
-- Install `curl` package
-  ```shell
-  # for opkg package manager (24.10)
-  opkg update
-  opkg install curl
-  
-  # for apk package manager (25.12 or latest)
-  apk update
-  apk add curl
-  ```
-
-- Execute install script (Multi-architecture support)
-  ```shell
-  sh -c "$(curl -ksS https://raw.githubusercontent.com/sbwml/luci-app-mosdns/v5/install.sh)"
-  ```
-
-  install via ghproxy:
-  ```shell
-  sh -c "$(curl -ksS https://raw.githubusercontent.com/sbwml/luci-app-mosdns/v5/install.sh)" _ gh_proxy="https://gh-proxy.com"
-  ```
+No prebuilt release is published by this work. The previous unauthenticated one-command installer is intentionally disabled. Do not pipe remote scripts into a shell or disable TLS verification. See [migration and validation notes](docs/V2-REBUILD.md) before testing on a router.
 
 --------------
 
