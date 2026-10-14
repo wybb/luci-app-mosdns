@@ -105,3 +105,187 @@ assert(!/promptAddRule|WHITELIST_FILE|BLOCKLIST_FILE/.test(statsSource));
 assert(statsSource.includes('Statistics does not change rule files.'));
 assert(statsSource.includes("L.url('admin', 'services', 'mosdns', 'rules')"));
 console.log('PASS: all retained view RPCs allowed by ACL; no raw writes/exec; statistics routes rule editing to ordered v2 rules.');
+
+function decodeGettextString(literal) {
+ assert(/^"(?:[^"\\\r\n]|\\(?:[abfnrtv\\"'?]|[0-7]{1,3}|x[0-9a-fA-F]+))*"$/.test(literal),'Invalid gettext string: '+literal);
+ const escapes={a:'\x07',b:'\b',f:'\f',n:'\n',r:'\r',t:'\t',v:'\v','\\':'\\','"':'"',"'":"'",'?':'?'};
+ return literal.slice(1,-1).replace(/\\(x[0-9a-fA-F]+|[0-7]{1,3}|[abfnrtv\\"'?])/g,(_,escape)=>Object.hasOwn(escapes,escape)?escapes[escape]:String.fromCodePoint(parseInt(escape[0]==='x'?escape.slice(1):escape,escape[0]==='x'?16:8)));
+}
+function parseGettext(text) {
+ const entries=new global.Map();let entry={},field=null;
+ function finish() {
+  if(Object.hasOwn(entry,'msgid')) {
+   assert(Object.hasOwn(entry,'msgstr'),'Missing msgstr: '+entry.msgid);
+   assert(!entries.has(entry.msgid),'Duplicate msgid: '+entry.msgid);
+   entries.set(entry.msgid,{msgstr:entry.msgstr,fuzzy:entry.fuzzy===true});
+  }
+  entry={};field=null;
+ }
+ for(const raw of text.replace(/^\uFEFF/,'').split(/\r?\n/)) {
+  const line=raw.trim();
+  if(!line){finish();continue;}
+  if(line.startsWith('#')) {
+   if(Object.hasOwn(entry,'msgstr'))finish();
+   if(line.startsWith('#,'))entry.fuzzy=entry.fuzzy===true||line.slice(2).split(',').some(flag=>flag.trim()==='fuzzy');
+   continue;
+  }
+  const directive=/^(msgid|msgstr)\s+(".*")$/.exec(line);
+  if(directive) {
+   if(directive[1]==='msgid'&&Object.hasOwn(entry,'msgid'))finish();
+   field=directive[1];
+   assert(!Object.hasOwn(entry,field),'Duplicate gettext field: '+field);
+   if(field==='msgstr')assert(Object.hasOwn(entry,'msgid'),'msgstr without msgid');
+   entry[field]=decodeGettextString(directive[2]);
+  } else {
+   assert(line.startsWith('"')&&field,'Unsupported gettext line: '+line);
+   entry[field]+=decodeGettextString(line);
+  }
+ }
+ finish();return entries;
+}
+function translationLiterals(source) {
+ const tokens=[];let offset=0,previous='';
+ const string=/(['"])(?:\\[\s\S]|(?!\1)[^\\\r\n])*?\1/y;
+ const identifier=/[A-Za-z_$][\w$]*/y;
+ while(offset<source.length) {
+  const char=source[offset],next=source[offset+1];
+  if(/\s/.test(char)){offset++;continue;}
+  if(char==='/'&&(next==='/'||next==='*')) {
+   const end=next==='/'?source.indexOf('\n',offset+2):source.indexOf('*/',offset+2);
+   assert(next==='/'||end>=0,'Unterminated JS comment');
+   offset=end<0?source.length:end+(next==='*'?2:1);continue;
+  }
+  if(char==='\''||char==='"') {
+   string.lastIndex=offset;const match=string.exec(source);assert(match,'Invalid JS string at '+offset);
+   tokens.push({kind:'string',text:match[0]});offset=string.lastIndex;previous='literal';continue;
+  }
+  if(char==='`') {
+   const start=offset++;
+   while(offset<source.length&&source[offset]!=='`'){if(source[offset]==='\\')offset++;offset++;}
+   assert(offset<source.length,'Unterminated JS template');
+   const template=source.slice(start,++offset);
+   assert(!/\$\{[\s\S]*\b_\s*\(/.test(template),'Translation in template interpolation needs extraction support');
+   tokens.push({kind:'template',text:template});previous='literal';continue;
+  }
+  if(char==='/'&&(['','(','[','{','=','==','===',':',',','!','?',';','return','=>','&&','||'].includes(previous))) {
+   let inClass=false,closed=false;offset++;
+   while(offset<source.length) {
+    const current=source[offset++];
+    if(current==='\\'){offset++;continue;}
+    if(current==='[')inClass=true;
+    if(current===']')inClass=false;
+    if(current==='/'&&!inClass){closed=true;break;}
+    assert(current!=='\n'&&current!=='\r','Unterminated JS regexp');
+   }
+   assert(closed,'Unterminated JS regexp');
+   while(/[a-z]/i.test(source[offset]||'')&&offset<source.length)offset++;
+   tokens.push({kind:'regexp',text:'/regexp/'});previous='literal';continue;
+  }
+  identifier.lastIndex=offset;const name=identifier.exec(source);
+  const operator=/^(?:===|!==|=>|==|!=|&&|\|\||\?\.|\+\+|--)/.exec(source.slice(offset));
+  const token=name?name[0]:operator?operator[0]:char;
+  tokens.push({kind:'token',text:token});previous=token;offset+=token.length;
+ }
+ const ids=[];
+ for(let i=0;i<tokens.length;i++) {
+  if(tokens[i].text!=='_'||tokens[i+1]?.text!=='('||['.','?.'].includes(tokens[i-1]?.text))continue;
+  assert(tokens[i+2]?.kind==='string'&&tokens[i+3]?.text===')','Translation call must contain one pure string literal');
+  ids.push(vm.runInNewContext('('+tokens[i+2].text+')',Object.create(null),{timeout:1000}));
+ }
+ return ids;
+}
+function printfPlaceholders(text) {
+ return Array.from(text.matchAll(/%%|%(?:\d+\$)?[-+ #0']*(?:\d+|\*(?:\d+\$)?)?(?:\.(?:\d+|\*(?:\d+\$)?))?(?:hh|ll|[hljztL])?[diuoxXfFeEgGaAcspn]/g),match=>match[0]);
+}
+function assertTranslations(ids,po,pot) {
+ for(const id of ids) {
+  assert(pot.has(id),'Missing POT msgid: '+id);
+  const entry=po.get(id);assert(entry,'Missing PO msgid: '+id);
+  assert(entry.msgstr.trim(),'Empty PO translation: '+id);
+  assert(!entry.fuzzy,'Fuzzy PO translation: '+id);
+  assert.deepEqual(printfPlaceholders(entry.msgstr),printfPlaceholders(id),'Printf placeholders changed: '+id);
+ }
+}
+const gettextFixture=String.raw`msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+# Translator comment with fuzzy in plain text
+#. Extracted comment
+#: view.js:1
+#| msgid "Old"
+#, c-format
+msgid ""
+"Quoted \"DNS\" "
+"path \\server\n\t\a\b\f\r\v\077\x21 %s"
+msgstr ""
+"Translated \"DNS\" "
+"path \\server\n\t\a\b\f\r\v?! %s"
+#, fuzzy, c-format
+msgid "Unused Cloudflare"
+msgstr "Unused translation"
+
+#~ msgid "Obsolete"
+#~ msgstr "Obsolete translation"
+
+msgid "Fresh"
+msgstr "Current"`;
+const fixturePO=parseGettext('\uFEFF'+gettextFixture.replace(/\n/g,'\r\n'));
+const escapedId='Quoted "DNS" path \\server\n\t\x07\b\f\r\v?! %s';
+assert.equal(fixturePO.size,4);
+assert.equal(fixturePO.get('').msgstr,'Content-Type: text/plain; charset=UTF-8\n');
+assert.deepEqual(fixturePO.get(escapedId),{msgstr:'Translated "DNS" path \\server\n\t\x07\b\f\r\v?! %s',fuzzy:false});
+assert.equal(fixturePO.get('Unused Cloudflare').fuzzy,true);assert.equal(fixturePO.get('Fresh').fuzzy,false);
+const fixturePOT=parseGettext(String.raw`msgid ""
+"Quoted \"DNS\" "
+"path \\server\n\t\a\b\f\r\v?! %s"
+msgstr ""`);
+assertTranslations([escapedId],fixturePO,fixturePOT);
+assert.throws(()=>assertTranslations(['Unused Cloudflare'],fixturePO,fixturePO),/Fuzzy PO/);
+assert.throws(()=>assertTranslations(['Missing'],fixturePO,fixturePOT),/Missing POT/);
+assert.throws(()=>assertTranslations([escapedId],new global.Map(),fixturePOT),/Missing PO/);
+for(const [msgstr,fuzzy,error] of [['',false,/Empty PO/],['   ',false,/Empty PO/],['Changed %d',false,/Printf placeholders/],['Changed %s %s',false,/Printf placeholders/],['Changed %s',true,/Fuzzy PO/]]) {
+ assert.throws(()=>assertTranslations([escapedId],new global.Map([[escapedId,{msgstr,fuzzy}]]),fixturePOT),error);
+}
+assert.deepEqual(printfPlaceholders('100%% %s %d %d %02d %.2f %1$s %*.*f'),['%%','%s','%d','%d','%02d','%.2f','%1$s','%*.*f']);
+assert.throws(()=>parseGettext('msgid "Missing"'),/Missing msgstr/);
+assert.throws(()=>parseGettext('msgid "Bad\\q"\nmsgstr "x"'),/Invalid gettext/);
+assert.throws(()=>parseGettext('msgid "Same"\nmsgstr "x"\nmsgid "Same"\nmsgstr "y"'),/Duplicate msgid/);
+assert.deepEqual(translationLiterals(String.raw`// _('Line comment')
+/* _("Block comment") */
+const text="_('String contents')";
+const template=\`_('Template contents')\`;
+const pattern=/_\('Regexp contents'\)/;
+const ratio=4/2;
+other_('Other function');object._('Method');
+_ /* between tokens */ ('Quoted \'DNS\' \\path\n');
+_("Double \"quotes\"");_('Unicode \u0041');
+if(false){_('Unreachable literal');}`.replace(/\\`/g,'`')),['Quoted \'DNS\' \\path\n','Double "quotes"','Unicode A','Unreachable literal']);
+assert.throws(()=>translationLiterals("_('part' + 'rest')"),/pure string literal/);
+assert.throws(()=>translationLiterals('_(getLabel())'),/pure string literal/);
+function filesWithExtension(directory,extension) {
+ return fs.readdirSync(directory,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name)).flatMap(entry=>{
+  const filename=require('path').join(directory,entry.name);
+  return entry.isDirectory()?filesWithExtension(filename,extension):entry.isFile()&&entry.name.endsWith(extension)?[filename]:[];
+ });
+}
+const translationFiles=[...filesWithExtension(root+'mosdns','.js'),...filesWithExtension(root+'view/mosdns','.js')];
+const usedIds=new Set();let literalCalls=0;
+for(const filename of translationFiles) {
+ const ids=translationLiterals(fs.readFileSync(filename,'utf8'));literalCalls+=ids.length;
+ for(const id of ids)usedIds.add(id);
+}
+const menuFiles=filesWithExtension(require('path').join(__dirname,'../luci-app-mosdns/root/usr/share/luci/menu.d'),'.json');
+let menuTitles=0;
+for(const filename of menuFiles) {
+ const menu=JSON.parse(fs.readFileSync(filename,'utf8'));
+ for(const entry of Object.values(menu)) {
+  if(!Object.hasOwn(entry,'title'))continue;
+  assert.equal(typeof entry.title,'string',filename+': nonliteral menu title');usedIds.add(entry.title);menuTitles++;
+ }
+}
+assert.equal(usedIds.size,234,'Current MosDNS translation inventory changed');
+const po=parseGettext(fs.readFileSync(require('path').join(__dirname,'../luci-app-mosdns/po/zh_Hans/mosdns.po'),'utf8'));
+const pot=parseGettext(fs.readFileSync(require('path').join(__dirname,'../luci-app-mosdns/po/templates/mosdns.pot'),'utf8'));
+assertTranslations(usedIds,po,pot);
+console.log('PASS: gettext multiline, C escapes, comments/fuzzy and extraction regressions; '+translationFiles.length+' JS files, '+literalCalls+' literal calls, '+menuTitles+' menu titles, '+usedIds.size+' unique used msgids; '+(po.size-1)+' PO and '+(pot.size-1)+' POT msgids; '+Array.from(usedIds).filter(id=>printfPlaceholders(id).length).length+' used printf msgids preserved.');

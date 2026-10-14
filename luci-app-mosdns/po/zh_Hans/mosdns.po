@@ -105,7 +105,7 @@ msgstr "阿里云公共 DNS（DNS over HTTPS）"
 msgid "Aliyun Public DNS (DNS over QUIC)"
 msgstr "阿里云公共 DNS（DNS over QUIC）"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1088
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:957
 msgid "All Queries"
 msgstr "所有查询"
 
@@ -114,8 +114,8 @@ msgstr "所有查询"
 msgid "Another update is already in progress."
 msgstr "另一个更新正在进行中。"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:815
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:957
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:695
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:826
 msgid "Answers"
 msgstr "应答结果"
 
@@ -123,7 +123,7 @@ msgstr "应答结果"
 msgid "Apple domains optimization"
 msgstr "Apple 域名解析优化"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1115
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:984
 msgid ""
 "Are you sure you want to clear all real-time query logs and top rankings?"
 msgstr "确定要清空所有实时查询日志和排行数据吗？"
@@ -142,11 +142,11 @@ msgid ""
 "rules through scheduled tasks."
 msgstr "通过定时任务自动更新 GeoIP 和 GeoSite 数据库以及广告过滤规则。"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:488
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:485
 msgid "Average Processing Time"
 msgstr "平均延迟"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:548
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:545
 msgid "Avg Processing"
 msgstr "平均处理"
 
@@ -159,7 +159,7 @@ msgstr "百度公共 DNS（180.76.76.76）"
 msgid "Basic Options"
 msgstr "基本选项"
 
-#: luci-app-mosdns/root/usr/share/luci/menu.d/luci-app-mosdns.json:14
+#: luci-app-mosdns/root/usr/share/luci/menu.d/luci-app-mosdns.json:18
 msgid "Basic Setting"
 msgstr "基本设置"
 
@@ -181,11 +181,11 @@ msgstr "黑名单"
 msgid "Block PTR"
 msgstr "PTR 黑名单"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1089
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:958
 msgid "Blocked Only"
 msgstr "仅拦截"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:466
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:463
 msgid "Blocked by Filters"
 msgstr "拦截总数"
 
@@ -207,16 +207,16 @@ msgstr "自动保存缓存"
 msgid "Cache Prefetching"
 msgstr "缓存预取"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1090
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:959
 msgid "Cached Only"
 msgstr "仅缓存"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:477
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:474
 msgid "Cached Queries"
 msgstr "缓存命中"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:740
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1120
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:16
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:989
 msgid "Cancel"
 msgstr "取消"
 
@@ -246,7 +246,7 @@ msgstr "思科公共 DNS（208.67.220.220）"
 msgid "Cisco Public DNS (208.67.222.222)"
 msgstr "思科公共 DNS（208.67.222.222）"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1140
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1009
 msgid "Clear"
 msgstr "清空"
 
@@ -254,22 +254,22 @@ msgstr "清空"
 msgid "Clear logs"
 msgstr "清空日志"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1111
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1114
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:980
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:983
 msgid "Clear query logs"
 msgstr "清除查询日志"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:871
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:888
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:740
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:757
 msgid "Click to view full details"
 msgstr "点击查看完整详情"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:797
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:954
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:677
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:823
 msgid "Client IP"
 msgstr "客户端 IP"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:842
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:711
 #: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/update.js:35
 msgid "Close"
 msgstr "关闭"
@@ -348,7 +348,7 @@ msgstr "DNS 缓存大小"
 msgid "DNS Forward"
 msgstr "DNS 转发"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:454
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:451
 msgid "DNS Queries Total"
 msgstr "DNS 查询总数"
 
@@ -393,7 +393,7 @@ msgstr ""
 msgid "DoH/TCP/DoT Connection Multiplexing idle timeout (default 30 seconds)"
 msgstr "DoH/TCP/DoT 连接复用空闲保持时间（默认 30 秒）"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:955
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:824
 msgid "Domain & Record"
 msgstr "域名与类型"
 
@@ -406,7 +406,7 @@ msgstr "域名不能为空"
 msgid "Domain:"
 msgstr "域名："
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:958
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:827
 msgid "Elapsed"
 msgstr "耗时"
 
@@ -439,12 +439,13 @@ msgstr "启用 TCP/DoT RFC 7766 新型 Query Pipelining 连接复用模式"
 msgid "Enable this option fallback policy forces forwarding to remote DNS"
 msgstr "启用此选项 fallback 策略会强制转发到远程 DNS"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic.js:142
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic.js:397
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:24
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/ip_mapping_v2.js:13
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:38
 msgid "Enabled"
 msgstr "启用"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:908
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:777
 msgid "Enter page number and press Enter to jump"
 msgstr "输入页码并按回车跳转"
 
@@ -499,7 +500,7 @@ msgstr "导出目录：/var/mosdns"
 
 #: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/logs.js:43
 msgid "Failed to clean logs."
-msgstr "清理日志失败：%s"
+msgstr "清理日志失败。"
 
 #: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1134
 msgid "Failed to clear query logs:"
@@ -517,7 +518,7 @@ msgstr "更新查询日志失败："
 msgid "Failed to update rule file: %s"
 msgstr "更新规则文件失败: %s"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1106
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:975
 msgid "First Page / Resume"
 msgstr "重置并恢复"
 
@@ -581,7 +582,7 @@ msgstr "GeoIP 类型"
 msgid "GeoSite Tags"
 msgstr "GeoSite 标签"
 
-#: luci-app-mosdns/root/usr/share/luci/menu.d/luci-app-mosdns.json:30
+#: luci-app-mosdns/root/usr/share/luci/menu.d/luci-app-mosdns.json:34
 msgid "Geodata Update"
 msgstr "更新数据库"
 
@@ -608,7 +609,8 @@ msgstr "授予 luci-app-mosdns 的 UCI 访问权限"
 msgid "Grey Lists"
 msgstr "灰名单"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules.js:55
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:41
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:42
 msgid "Hosts"
 msgstr "Hosts 列表"
 
@@ -658,7 +660,7 @@ msgid ""
 "seconds)."
 msgstr "后台线程扫描缓存以进行预取的时间间隔（单位：秒）"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:489
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:486
 msgid "Latency"
 msgstr "延迟"
 
@@ -703,7 +705,7 @@ msgstr "日志文件大小"
 msgid "Log Level"
 msgstr "日志等级"
 
-#: luci-app-mosdns/root/usr/share/luci/menu.d/luci-app-mosdns.json:46
+#: luci-app-mosdns/root/usr/share/luci/menu.d/luci-app-mosdns.json:50
 msgid "Logs"
 msgstr "日志"
 
@@ -742,16 +744,13 @@ msgid ""
 "no modification"
 msgstr "修改 DNS 应答结果的最小 TTL 值 (秒)，0 表示不修改"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic.js:31
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic.js:33
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic.js:106
 #: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/logs.js:70
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1156
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1025
 #: luci-app-mosdns/root/usr/share/luci/menu.d/luci-app-mosdns.json:3
 msgid "MosDNS"
 msgstr "MosDNS"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:520
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:517
 msgid ""
 "MosDNS API is unreachable. Please ensure MosDNS is running and stats_api "
 "plugin is enabled."
@@ -771,15 +770,15 @@ msgstr "未运行"
 msgid "Netflix, Disney+, Hulu and streaming media rules list will use this DNS"
 msgstr "自定义 Netflix、Disney+、Hulu 以及 “流媒体” 规则列表的 DNS 服务器"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:989
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:858
 msgid "Next"
 msgstr "下一页"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:778
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:658
 msgid "No DNS answer records returned."
 msgstr "无 DNS 应答记录"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:570
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:567
 msgid "No data available"
 msgstr "暂无数据"
 
@@ -787,15 +786,15 @@ msgstr "暂无数据"
 msgid "No log data."
 msgstr "无日志数据。"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:896
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:765
 msgid "No query log entries found."
 msgstr "未找到查询日志记录。"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:941
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:810
 msgid "Page %d / %d (%d entries)"
 msgstr "第 %d / %d 页（%d 条记录）"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:448
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:445
 msgid "Per-query speed"
 msgstr "单次查询速度"
 
@@ -836,7 +835,7 @@ msgstr "当剩余 TTL 小于此值（秒）时触发预取"
 msgid "Prevent DNS Leaks"
 msgstr "防止 DNS 泄漏"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:978
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:847
 msgid "Previous"
 msgstr "上一页"
 
@@ -855,7 +854,7 @@ msgstr "Quad9 公共 DNS（149.112.112.112）"
 msgid "Quad9 Public DNS (9.9.9.9)"
 msgstr "Quad9 公共 DNS（9.9.9.9）"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:821
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:701
 msgid "Query Log Details"
 msgstr "查询日志详情"
 
@@ -865,7 +864,7 @@ msgid ""
 "consume more memory)"
 msgstr "查询日志环形缓冲区容量（FIFO 覆盖，默认 2000，数值越大占用内存越多）"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1129
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:998
 msgid "Query logs cleared successfully."
 msgstr "查询日志清除成功。"
 
@@ -873,11 +872,12 @@ msgstr "查询日志清除成功。"
 msgid "RUNNING"
 msgstr "运行中"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1160
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1029
 msgid "Real-time Query Logs"
 msgstr "实时查询日志"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules.js:63
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:41
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:42
 msgid "Redirect"
 msgstr "重定向"
 
@@ -905,7 +905,7 @@ msgstr "远程 DNS 服务器"
 msgid "Ring Buffer Capacity"
 msgstr "环形缓冲区容量"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:809
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:689
 msgid "Rule Hit"
 msgstr "命中规则"
 
@@ -913,7 +913,7 @@ msgstr "命中规则"
 msgid "Rule Settings"
 msgstr "自定义规则列表"
 
-#: luci-app-mosdns/root/usr/share/luci/menu.d/luci-app-mosdns.json:22
+#: luci-app-mosdns/root/usr/share/luci/menu.d/luci-app-mosdns.json:26
 msgid "Rules"
 msgstr "规则列表"
 
@@ -925,7 +925,7 @@ msgstr "保存统计数据与查询日志在本地，并在下次启动时重新
 msgid "Save the cache locally and reload the cache dump on the next startup"
 msgstr "保存缓存到本地文件，以供下次启动时重新载入使用"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1077
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:946
 msgid "Search domain or client IP..."
 msgstr "搜索域名或客户端 IP..."
 
@@ -937,8 +937,8 @@ msgstr "设置日志文件的最大容量（单位：MB）。"
 msgid "Starting update..."
 msgstr "正在启动更新..."
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1156
-#: luci-app-mosdns/root/usr/share/luci/menu.d/luci-app-mosdns.json:38
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1025
+#: luci-app-mosdns/root/usr/share/luci/menu.d/luci-app-mosdns.json:42
 msgid "Statistics"
 msgstr "统计"
 
@@ -946,7 +946,7 @@ msgstr "统计"
 msgid "Stats Dump"
 msgstr "自动保存统计"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:956
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:825
 msgid "Status"
 msgstr "状态"
 
@@ -1006,20 +1006,20 @@ msgstr ""
 "这是文件 “/etc/mosdns/config_custom.yaml” 的内容，您的 MosDNS 配置将从此文件"
 "生成。仅接受 yaml 格式的配置内容。"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:801
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:953
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:681
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:822
 msgid "Time"
 msgstr "时间"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:609
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:606
 msgid "Top Blocked Domains"
 msgstr "拦截域名 (Top 10)"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:616
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:613
 msgid "Top Clients"
 msgstr "活跃客户端 (Top 10)"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:602
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:599
 msgid "Top Queried Domains"
 msgstr "查询域名 (Top 10)"
 
@@ -1069,7 +1069,7 @@ msgstr "更新成功"
 msgid "Updating Database..."
 msgstr "更新数据库..."
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:805
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:685
 msgid "Upstream"
 msgstr "上游服务器"
 
@@ -1114,15 +1114,604 @@ msgstr "信风公共 DNS（114.114.115.115）"
 msgid "https://gh-proxy.com"
 msgstr "https://gh-proxy.com"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:437
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:550
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:434
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:547
 msgid "● Live"
 msgstr "● 实时"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:233
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:230
 msgid "● Live Auto-refresh"
 msgstr "● 实时刷新"
 
-#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:237
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:234
 msgid "❚❚ Paused (Page %d)"
 msgstr "❚❚ 暂停 (第 %d 页)"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:51
+msgid "0 keeps the upstream TTL."
+msgstr "0 表示保留上游 TTL。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:31
+msgid "A size such as 1M."
+msgstr "填写大小，例如 1M。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:19
+msgid "API and statistics"
+msgstr "API 与统计"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:54
+msgid "API port (loopback only)"
+msgstr "API 端口（仅监听回环地址）"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:44
+msgid "Ad blocking"
+msgstr "广告过滤"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:45
+msgid "Ad list sources"
+msgstr "广告过滤规则来源"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:20
+msgid "Add DNS group"
+msgstr "添加 DNS 组"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/ip_mapping_v2.js:16
+msgid "After a match"
+msgstr "匹配后的操作"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:44
+msgid "Apple domains"
+msgstr "Apple 域名"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:25
+msgid "Applying configuration…"
+msgstr "正在应用配置…"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:33
+msgid "Auto"
+msgstr "自动"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:41
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:42
+msgid "Blacklist"
+msgstr "黑名单"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:46
+msgid "Blacklist type"
+msgstr "黑名单类型"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:35
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:35
+msgid "Bootstrap DNS"
+msgstr "Bootstrap DNS"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:41
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:42
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:43
+msgid "Built-in list"
+msgstr "内置列表"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:19
+msgid "Cache and upstreams"
+msgstr "缓存与上游"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:53
+msgid "Cache dump interval (seconds)"
+msgstr "自动保存缓存间隔（秒）"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:46
+msgid "Cache entries"
+msgstr "缓存条目数"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:60
+msgid "Cache flush failed."
+msgstr "刷新缓存失败。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:60
+msgid "Cache flushed."
+msgstr "缓存已刷新。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:16
+msgid "Checking service status…"
+msgstr "正在检查服务状态…"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:44
+msgid "China domains"
+msgstr "国内域名"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:26
+msgid "Choose another default and remove rule references before deleting this group."
+msgstr "删除此组前，请选择其他默认组，并移除引用此组的规则。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:36
+msgid "Concurrency"
+msgstr "并发数"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:25
+msgid "Configuration"
+msgstr "配置"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:17
+msgid "Configure DNS groups, ordered routing rules and independent IP mappings. Save stages changes; Save & Apply validates and reloads the service. A failed reload keeps the last working service where possible; check the apply status below."
+msgstr "配置 DNS 组、按顺序执行的路由规则及独立的 IP 映射。“保存”仅暂存更改；“保存并应用”会验证配置并重新加载服务。重新加载失败时，会尽可能保留上次正常运行的服务，请查看下方的应用状态。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/ip_mapping_v2.js:16
+msgid "Continue"
+msgstr "继续"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:86
+msgid "Could not read rule file."
+msgstr "无法读取规则文件。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:39
+msgid "Could not save custom configuration."
+msgstr "无法保存自定义配置。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:101
+msgid "Could not save rule file."
+msgstr "无法保存规则文件。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:26
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:36
+msgid "Custom YAML configuration"
+msgstr "自定义 YAML 配置"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:36
+msgid "Custom mode bypasses the generated groups and routing rules. The file is saved atomically with a backup. Startup can still fail; check apply status after reloading."
+msgstr "自定义模式不使用自动生成的 DNS 组和路由规则。文件会以原子方式保存并备份。服务仍可能启动失败，请在重新加载后检查应用状态。"
+
+#: luci-app-mosdns/root/usr/share/luci/menu.d/luci-app-mosdns.json:58
+msgid "DNS Groups"
+msgstr "DNS 组"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:59
+msgid "DNS cache"
+msgstr "DNS 缓存"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:47
+msgid "DNS group"
+msgstr "DNS 组"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:11
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:16
+msgid "DNS groups"
+msgstr "DNS 组"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:28
+msgid "DNS listen / forwarding port"
+msgstr "DNS 监听 / 转发端口"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:33
+msgid "DNS servers"
+msgstr "DNS 服务器"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:13
+msgid "Default DNS group"
+msgstr "默认 DNS 组"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:30
+msgid "Default fallback"
+msgstr "默认回退"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:41
+msgid "Default upstream concurrency"
+msgstr "默认上游并发数"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:90
+msgid "Disable or delete this rule, or enter replacement content to save a new managed file. Leaving this editor empty will not overwrite the original reference."
+msgstr "请禁用或删除此规则，或输入替换内容以保存为新的托管文件。编辑器留空不会覆盖原文件引用。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:31
+msgid "Display name"
+msgstr "显示名称"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:46
+msgid "Domain"
+msgstr "域名"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:41
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:42
+msgid "Domain routing"
+msgstr "域名分流"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:45
+msgid "Enable cache"
+msgstr "启用缓存"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:55
+msgid "Enable statistics collector"
+msgstr "启用统计收集器"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:62
+msgid "Extra tags to export for IP lists."
+msgstr "为 IP 列表导出的额外标签。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:61
+msgid "Extra tags to export for rule files."
+msgstr "为规则文件导出的额外标签。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:1003
+msgid "Failed to clear query logs: "
+msgstr "清除查询日志失败："
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:901
+msgid "Failed to update query logs: "
+msgstr "更新查询日志失败："
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:31
+msgid "Fallback IP strategy"
+msgstr "回退 IP 策略"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:59
+msgid "Flush cache"
+msgstr "刷新缓存"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:33
+msgid "Forward dnsmasq queries to MosDNS"
+msgstr "将 dnsmasq 查询转发到 MosDNS"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:54
+msgid "Generated configuration only. Custom YAML controls its own API address and must use a trusted bind address."
+msgstr "仅适用于自动生成的配置。自定义 YAML 自行设置 API 地址，必须绑定到可信地址。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:26
+msgid "Generated v2 configuration"
+msgstr "自动生成的 v2 配置"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:62
+msgid "GeoIP tags"
+msgstr "GeoIP 标签"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:61
+msgid "GeoSite tags"
+msgstr "GeoSite 标签"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:19
+msgid "Geodata"
+msgstr "GeoData 数据库"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:63
+msgid "Global ECS"
+msgstr "全局 ECS"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:44
+msgid "Global domains"
+msgstr "国外域名"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:63
+msgid "Global maximum TTL"
+msgstr "全局最大 TTL"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:63
+msgid "Global minimum TTL"
+msgstr "全局最小 TTL"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:63
+msgid "Global type 65 blocking"
+msgstr "全局类型 65 记录拦截"
+
+#: luci-app-mosdns/root/usr/share/luci/menu.d/luci-app-mosdns.json:66
+msgid "IP Mappings"
+msgstr "IP 映射"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/ip_mapping_v2.js:10
+msgid "IP mappings"
+msgstr "IP 映射"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:49
+msgid "IP strategy"
+msgstr "IP 策略"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/ip_mapping_v2.js:17
+msgid "IP/CIDR list"
+msgstr "IP/CIDR 列表"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:34
+msgid "IPv4 first"
+msgstr "首选 IPv4"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:33
+msgid "IPv4 only"
+msgstr "仅 IPv4"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:34
+msgid "IPv6 first"
+msgstr "首选 IPv6"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:33
+msgid "IPv6 only"
+msgstr "仅 IPv6"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:42
+msgid "Idle timeout (seconds)"
+msgstr "空闲超时（秒）"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:28
+msgid "In custom mode, this forwarding port must match the listener defined in your YAML."
+msgstr "自定义模式下，此转发端口必须与 YAML 中设置的监听端口一致。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/ip_mapping_v2.js:10
+msgid "Independent response-IP mappings run in this order. Continue passes the transformed answer to the next mapping; Stop ends mapping after a match."
+msgstr "独立的应答 IP 映射按此顺序执行。“继续”将转换后的应答传给下一条映射；“停止”在匹配后结束映射处理。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:24
+msgid "Last apply failed: "
+msgstr "上次应用失败："
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:26
+msgid "Last apply succeeded."
+msgstr "上次应用成功。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:47
+msgid "Lazy cache TTL (seconds)"
+msgstr "乐观缓存 TTL（秒）"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:36
+msgid "Leave empty to inherit the global setting."
+msgstr "留空则使用全局设置。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:63
+msgid "Legacy ECS address"
+msgstr "旧版 ECS 地址"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:63
+msgid "Legacy leak prevention"
+msgstr "旧版防泄漏选项"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:19
+msgid "Legacy options"
+msgstr "旧版选项"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:27
+msgid "Listen address"
+msgstr "监听地址"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:32
+msgid "Log backups"
+msgstr "日志备份数"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:30
+msgid "Log file"
+msgstr "日志文件"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:29
+msgid "Log level"
+msgstr "日志等级"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:31
+msgid "Log size"
+msgstr "日志大小"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/ip_mapping_v2.js:15
+msgid "Mapped IP addresses"
+msgstr "映射后的 IP 地址"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:50
+msgid "Minimum prefetch hits"
+msgstr "预取最小命中次数"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:40
+msgid "Mode"
+msgstr "模式"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:22
+msgid "MosDNS is running."
+msgstr "MosDNS 正在运行。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:22
+msgid "MosDNS is stopped."
+msgstr "MosDNS 已停止。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:17
+msgid "MosDNS v2"
+msgstr "MosDNS v2"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/ip_mapping_v2.js:14
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:39
+msgid "Name"
+msgstr "名称"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:23
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:26
+msgid "No apply result recorded."
+msgstr "暂无应用结果记录。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:65
+msgid "Not set"
+msgstr "未设置"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:52
+msgid "One rule per line. Domain lists use MosDNS domain syntax; hosts use “domain IP”; redirects use “source-domain target-domain”."
+msgstr "每行一条规则。域名列表使用 MosDNS 域名语法；Hosts 使用“domain IP”（域名 IP）；重定向使用“source-domain target-domain”（源域名 目标域名）。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/ip_mapping_v2.js:17
+msgid "One source IP address or CIDR per line."
+msgstr "每行一个源 IP 地址或 CIDR。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:33
+msgid "One upstream per entry: IP, tls://, https://, h3:// or quic://."
+msgstr "每项填写一个上游：IP、tls://、https://、h3:// 或 quic://。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:706
+msgid "Open routing rules"
+msgstr "打开路由规则"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/ip_mapping_v2.js:11
+msgid "Ordered IP mappings"
+msgstr "有序 IP 映射"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:36
+msgid "Ordered rules"
+msgstr "有序规则"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:46
+msgid "PTR"
+msgstr "PTR"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:52
+msgid "Persist cache"
+msgstr "自动保存缓存"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:57
+msgid "Persist statistics"
+msgstr "自动保存统计"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:49
+msgid "Prefetch before expiry (seconds)"
+msgstr "预取触发阈值（到期前秒数）"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:48
+msgid "Prefetch hot cache entries"
+msgstr "预取高频缓存条目"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:51
+msgid "Prefetch scan interval (seconds)"
+msgstr "预取扫描周期（秒）"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:64
+msgid "Preserved for migration only. This option is not implemented by the v2 generator and has no effect."
+msgstr "仅为迁移保留。v2 配置生成器未实现此选项，设置无效。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:34
+msgid "Redirect local DNS traffic"
+msgstr "重定向本地 DNS 流量"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:44
+msgid "Reduces security. Enable only when you understand the risk."
+msgstr "会降低安全性，请仅在了解风险时启用。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:11
+msgid "Renaming groups preserves rule references. Save & Apply validates and reloads MosDNS."
+msgstr "重命名 DNS 组不会改变规则引用。“保存并应用”会验证配置并重新加载 MosDNS。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:35
+msgid "Resolves upstream server hostnames."
+msgstr "用于解析上游服务器的主机名。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:35
+msgid "Restore all v2 defaults"
+msgstr "恢复全部 v2 默认设置"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:23
+msgid "Restore and reload"
+msgstr "恢复并重新加载"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:32
+msgid "Restore default rules"
+msgstr "恢复默认规则"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:19
+msgid "Restore failed."
+msgstr "恢复失败。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:34
+msgid "Restore groups and rules"
+msgstr "恢复 DNS 组和规则"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:33
+msgid "Restore rules, keep groups"
+msgstr "恢复规则，保留 DNS 组"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:13
+msgid "Restore v2 defaults?"
+msgstr "恢复 v2 默认设置？"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:29
+msgid "Routing rules"
+msgstr "路由规则"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:52
+msgid "Rule content"
+msgstr "规则内容"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:70
+msgid "Rule file status"
+msgstr "规则文件状态"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:29
+msgid "Rules run from top to bottom. Use the reorder controls to change priority. Unmatched requests use the default DNS group. Rule files are written atomically before configuration is saved."
+msgstr "规则从上到下执行，可通过排序控件调整优先级。未匹配的请求使用默认 DNS 组。规则文件会在保存配置前以原子方式写入。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:63
+msgid "Select an existing DNS group."
+msgstr "请选择已有的 DNS 组。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:19
+msgid "Service"
+msgstr "服务"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/logs.js:27
+msgid "Showing only the first 256 KiB of this log."
+msgstr "仅显示此日志的前 256 KiB。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:44
+msgid "Skip TLS certificate verification"
+msgstr "跳过 TLS 证书验证"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:56
+msgid "Statistics capacity"
+msgstr "统计容量"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:58
+msgid "Statistics dump interval (seconds)"
+msgstr "自动保存统计间隔（秒）"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/ip_mapping_v2.js:16
+msgid "Stop"
+msgstr "停止"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:44
+msgid "Streaming media domains"
+msgstr "流媒体域名"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/basic_v2.js:43
+msgid "TCP/DoT pipelining"
+msgstr "TCP/DoT 查询流水线"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:51
+msgid "TTL override (seconds)"
+msgstr "覆盖 TTL（秒）"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:90
+msgid "The original file could not be read and its reference is preserved: "
+msgstr "无法读取原文件，已保留其引用："
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:14
+msgid "This replaces DNS groups, routing rules and IP mappings with v2 defaults. A configuration backup is made. Save or discard pending edits before continuing. The service reloads immediately."
+msgstr "将 DNS 组、路由规则和 IP 映射替换为 v2 默认设置，并备份配置。继续前请保存或放弃尚未保存的编辑。服务会立即重新加载。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:14
+msgid "This replaces the routing rules and IP mappings while keeping DNS groups. A configuration backup is made. Save or discard pending edits before continuing. The service reloads immediately."
+msgstr "将替换路由规则和 IP 映射，保留 DNS 组，并备份配置。继续前请保存或放弃尚未保存的编辑。服务会立即重新加载。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:705
+msgid "To permit or block this domain, edit the appropriate ordered rule. Statistics does not change rule files."
+msgstr "如需放行或拦截此域名，请编辑对应的有序规则。统计页面不会修改规则文件。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:28
+msgid "Unable to check apply status: "
+msgstr "无法检查应用状态："
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/logs.js:27
+msgid "Unable to read log: "
+msgstr "无法读取日志："
+
+#: luci-app-mosdns/htdocs/luci-static/resources/mosdns/v2.js:24
+msgid "Unknown error"
+msgstr "未知错误"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:18
+msgid "Unnamed group"
+msgstr "未命名组"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:32
+msgid "Use interface DNS"
+msgstr "使用接口 DNS"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/dns_groups_v2.js:13
+msgid "Used when no routing rule returns an answer. Renaming a group does not change its rule references."
+msgstr "没有路由规则返回应答时使用此组。重命名组不会改变规则对它的引用。"
+
+#: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:45
+msgid "geosite.dat or a supported HTTPS domain-list URL."
+msgstr "geosite.dat 或受支持的 HTTPS 域名列表 URL。"
