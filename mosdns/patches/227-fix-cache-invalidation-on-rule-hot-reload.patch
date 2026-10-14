@@ -729,3 +729,182 @@ dumps are accepted only before the first live publication in this process.
  				bp.L().Info("reloaded files", zap.Strings("files", changedFiles), zap.Int("length", newInner.Len()))
  			}
  		})
+--- a/pkg/concurrent_map/map.go
++++ b/pkg/concurrent_map/map.go
+@@ -162,8 +162,8 @@
+ }
+ 
+ func (m *shard[K, V]) flush() {
+-	m.l.RLock()
+-	defer m.l.RUnlock()
++	m.l.Lock()
++	defer m.l.Unlock()
+ 	m.m = make(map[K]V)
+ }
+ 
+--- /dev/null
++++ b/pkg/concurrent_map/flush_race_test.go
+@@ -0,0 +1,42 @@
++package concurrent_map
++
++import (
++	"testing"
++	"time"
++)
++
++func TestHotReloadFlushWaitsForReader(t *testing.T) {
++	s := newShard[int, int](0)
++	s.set(1, 1)
++	s.l.RLock()
++	started, done := make(chan struct{}), make(chan struct{})
++	go func() {
++		close(started)
++		s.flush()
++		close(done)
++	}()
++	<-started
++	select {
++	case <-done:
++		s.l.RUnlock()
++		t.Fatal("flush completed while a reader held the shard lock")
++	case <-time.After(100 * time.Millisecond):
++	}
++	value, present := s.m[1]
++	s.l.RUnlock()
++	if !present || value != 1 {
++		t.Error("flush changed the map while a reader held the shard lock")
++	}
++	select {
++	case <-done:
++	case <-time.After(2 * time.Second):
++		t.Fatal("flush did not finish after the reader released the shard lock")
++	}
++	if _, present := s.get(1); present || s.len() != 0 {
++		t.Fatal("flush retained an entry")
++	}
++	s.set(2, 2)
++	if value, present := s.get(2); !present || value != 2 {
++		t.Fatal("shard unusable after flush")
++	}
++}
+--- /dev/null
++++ b/plugin/executable/cache/hot_reload_readers_test.go
+@@ -0,0 +1,118 @@
++package cache
++
++import (
++	"context"
++	"fmt"
++	"net/http/httptest"
++	"sync"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	"github.com/IrineSistiana/mosdns/v5/pkg/query_context"
++	"github.com/IrineSistiana/mosdns/v5/pkg/rule_state"
++	"github.com/IrineSistiana/mosdns/v5/plugin/executable/sequence"
++	"github.com/prometheus/client_golang/prometheus"
++	"github.com/prometheus/client_golang/prometheus/promhttp"
++)
++
++func TestHotReloadConcurrentMetricsAndCacheReads(t *testing.T) {
++	c := NewCache(&Args{Size: 4096}, Opts{})
++	defer c.Close()
++	reg := prometheus.NewRegistry()
++	if err := c.RegMetricsTo(reg); err != nil {
++		t.Fatal(err)
++	}
++	metrics := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
++	q := reloadQuery()
++	k := getMsgKey(q.Q())
++	if !c.saveForGeneration(q.RuleGeneration, k, reloadResponse(q.Q())) {
++		t.Fatal("initial write rejected")
++	}
++	next := sequence.NewChainWalker([]*sequence.ChainNode{{E: reloadAnswer(func(_ context.Context, q *query_context.Context) error {
++		if q.R() == nil {
++			q.SetResponse(reloadResponse(q.Q()))
++		}
++		return nil
++	})}}, nil)
++	start, readersStarted := make(chan struct{}), make(chan struct{}, 8)
++	stop := make(chan struct{})
++	var wg sync.WaitGroup
++	var reads, scrapes atomic.Uint64
++	failures := make(chan error, 8)
++	for worker := 0; worker < 8; worker++ {
++		wg.Add(1)
++		go func(worker int) {
++			defer wg.Done()
++			<-start
++			for iteration := 0; ; iteration++ {
++				select {
++				case <-stop:
++					return
++				default:
++				}
++				if worker < 4 {
++					recorder := httptest.NewRecorder()
++					metrics.ServeHTTP(recorder, httptest.NewRequest("GET", "/metrics", nil))
++					if recorder.Code != 200 {
++						failures <- fmt.Errorf("metrics status %d", recorder.Code)
++						return
++					}
++					scrapes.Add(1)
++				} else {
++					if err := c.Exec(context.Background(), reloadQuery(), next); err != nil {
++						failures <- err
++						return
++					}
++					c.backend.Get(key(k))
++					c.backend.Len()
++					reads.Add(1)
++				}
++				if iteration == 0 {
++					readersStarted <- struct{}{}
++				}
++			}
++		}(worker)
++	}
++	close(start)
++	for worker := 0; worker < 8; worker++ {
++		select {
++		case <-readersStarted:
++		case err := <-failures:
++			close(stop)
++			wg.Wait()
++			t.Fatal(err)
++		case <-time.After(5 * time.Second):
++			close(stop)
++			t.Fatal("readers did not start")
++		}
++	}
++	published := make(chan struct{})
++	go func() {
++		for iteration := 0; iteration < 500; iteration++ {
++			rule_state.Publish(func() {})
++			q := reloadQuery()
++			c.saveForGeneration(q.RuleGeneration, k, reloadResponse(q.Q()))
++		}
++		close(published)
++	}()
++	select {
++	case <-published:
++	case <-time.After(10 * time.Second):
++		close(stop)
++		t.Fatal("publication deadlocked with metrics or cache readers")
++	}
++	close(stop)
++	wg.Wait()
++	close(failures)
++	for err := range failures {
++		t.Error(err)
++	}
++	if reads.Load() == 0 || scrapes.Load() == 0 {
++		t.Fatal("metrics or cache reads were not exercised")
++	}
++	rule_state.Publish(func() {})
++	if c.backend.Len() != 0 {
++		t.Fatal("publication retained cache entries")
++	}
++}

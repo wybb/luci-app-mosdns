@@ -1,0 +1,281 @@
+From: mosdns v2 rebuild
+Subject: [PATCH] validate migration domain sets with the native loader
+
+--- /dev/null
++++ b/coremain/sanitize_domain_set.go
+@@ -0,0 +1,98 @@
++package coremain
++
++import (
++	"bufio"
++	"encoding/json"
++	"fmt"
++	"os"
++	"strings"
++
++	"github.com/IrineSistiana/mosdns/v5/pkg/matcher/domain"
++	"github.com/IrineSistiana/mosdns/v5/pkg/utils"
++	"github.com/spf13/cobra"
++)
++
++func init() {
++	AddSubCmd(newSanitizeDomainSetCmd())
++}
++
++type sanitizedDomainSet struct {
++	Content string `json:"content"`
++	Count   int    `json:"count"`
++}
++
++func newSanitizeDomainSetCmd() *cobra.Command {
++	var file string
++	cmd := &cobra.Command{
++		Use:          "sanitize-domain-set --file path",
++		Short:        "Annotate unsupported domain_set lines without changing the file.",
++		Args:         cobra.NoArgs,
++		SilenceUsage: true,
++		RunE: func(cmd *cobra.Command, args []string) error {
++			if file == "" {
++				return fmt.Errorf("file path is required")
++			}
++			data, err := os.ReadFile(file)
++			if err != nil {
++				return fmt.Errorf("read domain_set file: %w", err)
++			}
++			result, err := sanitizeDomainSet(string(data))
++			if err != nil {
++				return err
++			}
++			return json.NewEncoder(cmd.OutOrStdout()).Encode(result)
++		},
++	}
++	cmd.Flags().StringVar(&file, "file", "", "domain_set file to read")
++	_ = cmd.MarkFlagRequired("file")
++	return cmd
++}
++
++func sanitizeDomainSet(content string) (sanitizedDomainSet, error) {
++	result := sanitizedDomainSet{}
++	scanner := bufio.NewScanner(strings.NewReader(content))
++	for scanner.Scan() {
++	}
++	if err := scanner.Err(); err != nil {
++		return result, fmt.Errorf("scan domain_set file: %w", err)
++	}
++	var output strings.Builder
++	for _, line := range strings.SplitAfter(content, "\n") {
++		if line == "" {
++			continue
++		}
++		pattern := strings.TrimSpace(utils.RemoveComment(line, "#"))
++		unsupported := unsupportedDomainSetPattern(pattern)
++		if err := domain.LoadFromTextReader(domain.NewDomainMixMatcher(), strings.NewReader(line), nil); err != nil {
++			unsupported = true
++		}
++		if unsupported {
++			output.WriteString("# mosdns v2 migration: unsupported domain_set line: ")
++			result.Count++
++		}
++		output.WriteString(line)
++	}
++	result.Content = output.String()
++	if err := domain.LoadFromTextReader(domain.NewDomainMixMatcher(), strings.NewReader(result.Content), nil); err != nil {
++		return sanitizedDomainSet{}, fmt.Errorf("sanitized domain_set cannot load: %w", err)
++	}
++	return result, nil
++}
++
++func unsupportedDomainSetPattern(pattern string) bool {
++	if pattern == "" {
++		return false
++	}
++	if typ, _, ok := strings.Cut(pattern, ":"); ok {
++		switch typ {
++		case domain.MatcherFull, domain.MatcherDomain, domain.MatcherKeyword, domain.MatcherRegexp:
++			return false
++		}
++	}
++	for _, prefix := range []string{"@@", "|", "^", "*", "/", "!"} {
++		if strings.HasPrefix(pattern, prefix) {
++			return true
++		}
++	}
++	return strings.ContainsAny(pattern, "|^*$")
++}
+--- /dev/null
++++ b/coremain/sanitize_domain_set_test.go
+@@ -0,0 +1,174 @@
++package coremain
++
++import (
++	"bufio"
++	"bytes"
++	"encoding/json"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++
++	"github.com/IrineSistiana/mosdns/v5/pkg/matcher/domain"
++)
++
++func TestSanitizeDomainSetMatrix(t *testing.T) {
++	cases := []struct {
++		line string
++		bad  bool
++	}{
++		{"ads.example", false},
++		{"domain:ads.example", false},
++		{"full:ads.example", false},
++		{"keyword:ads", false},
++		{`regexp:^ads\.example$`, false},
++		{`regexp:^(ads|track)\.example$`, false},
++		{`regexp:^ads\.[a-z]+$`, false},
++		{`regexp:^ads\.example$ # trailing comment`, false},
++		{`regexp:^ads\.example# stripped by loader`, false},
++		{`regexp:# comment leaves an empty valid regexp`, false},
++		{`regexp:[# comment leaves an invalid regexp`, true},
++		{`regexp:[`, true},
++		{`regexp:^(?=ads)`, true},
++		{`regexp:^(ads)\1$`, true},
++		{`regexp:a b`, true},
++		{"unknown:ads.example", true},
++		{"^ads.example", true},
++		{"||ads.example^", true},
++		{"@@||ads.example^", true},
++		{"|ads.example|", true},
++		{"*ads*", true},
++		{`/ads\.example$/`, true},
++		{"ads.example$important", true},
++		{"ads.example^", true},
++		{"ads.example|", true},
++		{"ads.*.example", true},
++		{"ads|track.example", true},
++		{"full:ads.example|", false},
++		{"domain:ads.*.example", false},
++		{"keyword:ads.example^|*$", false},
++		{"ads-tracker.example", false},
++		{"0.0.0.0 ads.example", true},
++		{"127.0.0.1 ads.example", true},
++		{"!comment", true},
++		{"! comment", true},
++		{"  ||ads.example^  ", true},
++		{"ads.example # comment", false},
++		{"# ||ads.example^", false},
++		{"", false},
++		{" \t", false},
++		{"例子.测试", false},
++		{"keyword:广告", false},
++		{`keyword:@@||^*/$options:([])!`, false},
++		{`full:^ads.example`, false},
++		{`domain:||ads.example^`, false},
++	}
++	for _, tc := range cases {
++		t.Run(tc.line, func(t *testing.T) {
++			for _, ending := range []string{"", "\n", "\r\n"} {
++				input := tc.line + ending
++				result, err := sanitizeDomainSet(input)
++				if err != nil {
++					t.Fatal(err)
++				}
++				want, count := input, 0
++				if tc.bad {
++					want = "# mosdns v2 migration: unsupported domain_set line: " + input
++					count = 1
++				}
++				if result.Content != want || result.Count != count {
++					t.Fatalf("got %#v, want content %q count %d", result, want, count)
++				}
++				if err := domain.LoadFromTextReader(domain.NewDomainMixMatcher(), strings.NewReader(result.Content), nil); err != nil {
++					t.Fatal("sanitized file does not load", err)
++				}
++				again, err := sanitizeDomainSet(result.Content)
++				if err != nil || again.Content != result.Content || again.Count != 0 {
++					t.Fatal("sanitization is not idempotent", again, err)
++				}
++			}
++		})
++	}
++}
++
++func TestSanitizeDomainSetMixedFileAndMatch(t *testing.T) {
++	input := "# 广告\r\n\r\nads.example\r\n||track.example^\nregexp:^exact\\.example$\nkeyword:@@||^*/$options:([])!\r\nregexp:["
++	result, err := sanitizeDomainSet(input)
++	if err != nil || result.Count != 2 {
++		t.Fatal(result, err)
++	}
++	want := strings.Replace(input, "||track.example^\n", "# mosdns v2 migration: unsupported domain_set line: ||track.example^\n", 1)
++	want = strings.TrimSuffix(want, "regexp:[") + "# mosdns v2 migration: unsupported domain_set line: regexp:["
++	if result.Content != want {
++		t.Fatalf("line endings or content changed: %q", result.Content)
++	}
++	m := domain.NewDomainMixMatcher()
++	if err := domain.LoadFromTextReader(m, strings.NewReader(result.Content), nil); err != nil {
++		t.Fatal(err)
++	}
++	for name, want := range map[string]bool{"ads.example.": true, "sub.ads.example.": true, "notads.example.": false, "ads.example.evil.": false, "track.example.": false, "exact.example.": true, "exact.example.evil.": false} {
++		if _, got := m.Match(name); got != want {
++			t.Errorf("Match(%q)=%v want %v", name, got, want)
++		}
++	}
++}
++
++func TestSanitizeDomainSetScannerLimits(t *testing.T) {
++	for _, prefix := range []string{"", "#", "||", "regexp:"} {
++		input := prefix + strings.Repeat("a", bufio.MaxScanTokenSize) + "\n"
++		if err := domain.LoadFromTextReader(domain.NewDomainMixMatcher(), strings.NewReader(input), nil); err == nil {
++			t.Fatal("loader accepted oversized line")
++		}
++		if _, err := sanitizeDomainSet(input); err == nil {
++			t.Fatal("sanitizer accepted oversized line")
++		}
++	}
++	nearLimit := "||" + strings.Repeat("a", bufio.MaxScanTokenSize-30) + "\n"
++	if _, err := sanitizeDomainSet(nearLimit); err == nil {
++		t.Fatal("annotation exceeding the loader limit was accepted")
++	}
++	input := strings.Repeat("# retained\n", 110000)
++	result, err := sanitizeDomainSet(input)
++	if err != nil || result.Count != 0 || result.Content != input {
++		t.Fatal("large file with short lines rejected or changed", err)
++	}
++}
++
++func TestSanitizeDomainSetCommand(t *testing.T) {
++	root := t.TempDir()
++	path := filepath.Join(root, "规则 file.txt")
++	input := "ads.example\r\nregexp:[\n"
++	if err := os.WriteFile(path, []byte(input), 0600); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("MOSDNS_READY_FILE", filepath.Join(root, "ready.pid"))
++	t.Setenv("MOSDNS_INVALIDATE_CACHE", "1")
++	cmd := newSanitizeDomainSetCmd()
++	var out bytes.Buffer
++	cmd.SetOut(&out)
++	cmd.SetErr(&out)
++	cmd.SetArgs([]string{"--file", path})
++	if err := cmd.Execute(); err != nil {
++		t.Fatal(err)
++	}
++	var result sanitizedDomainSet
++	if err := json.Unmarshal(out.Bytes(), &result); err != nil || result.Count != 1 {
++		t.Fatal("invalid JSON result", out.String(), err)
++	}
++	if data, err := os.ReadFile(path); err != nil || string(data) != input {
++		t.Fatal("input file changed", err)
++	}
++	if _, err := os.Stat(filepath.Join(root, "ready.pid")); !os.IsNotExist(err) {
++		t.Fatal("command initialized server readiness", err)
++	}
++	for _, args := range [][]string{nil, {"--file", ""}, {"--file", filepath.Join(root, "missing")}, {"--file", root}, {"--file", path, "extra"}} {
++		cmd := newSanitizeDomainSetCmd()
++		var out bytes.Buffer
++		cmd.SetOut(&out)
++		cmd.SetErr(&out)
++		cmd.SetArgs(args)
++		if err := cmd.Execute(); err == nil {
++			t.Fatal("invalid invocation succeeded", args)
++		}
++	}
++}

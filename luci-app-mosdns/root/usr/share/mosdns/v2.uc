@@ -2,11 +2,15 @@
 'use strict';
 
 import { cursor } from 'uci';
-import { readfile, writefile, rename, unlink, stat, lstat, realpath, chmod, popen, stderr } from 'fs';
-import { generate, values } from './v2-config.uc';
+import { readfile, writefile, rename, unlink, stat, lstat, realpath, chmod, popen, rmdir, stderr } from 'fs';
+import { generate, values, rule_path } from './v2-config.uc';
 import { migrate, serialize } from './v2-migrate.uc';
 
 function fail(message) { stderr.write('mosdns v2: ' + message + '\n'); exit(1); }
+
+function shell_quote(value) {
+	return "'" + replace(value, /'/g, "'\"'\"'") + "'";
+}
 
 try {
 	let command = ARGV[0];
@@ -20,8 +24,11 @@ try {
 		let lines = split(streaming, '\n');
 		for (let i = 0; i < length(lines); i++)
 			if (match(lines[i], /^[ \t]*[^# \t\r\n]/)) has_streaming = true;
+		let sanitize = true;
+		for (let i = 0; i < length(sections); i++)
+			if (sections[i]['.type'] == 'mosdns' && sections[i]['.name'] == 'config' && sections[i].blacklist_migration_version == '1') sanitize = false;
 		let migrated = migrate(sections, { streaming_rules: has_streaming });
-		if (!migrated.changed) exit(0);
+		if (!migrated.changed && !sanitize) exit(0);
 		let path = '/etc/config/mosdns', backup = path + '.pre-v2', temporary = path + '.v2-new';
 		let original = readfile(path);
 		if (original == null) fail('Cannot read configuration for backup');
@@ -30,11 +37,62 @@ try {
 			if (writefile(staged_backup, original) != length(original) || !chmod(staged_backup, 0600) || !rename(staged_backup, backup)) { unlink(staged_backup); fail('Cannot create migration backup'); }
 		}
 		if (readfile(backup) == null) fail('Existing migration backup is unreadable');
-		let data = serialize(migrated.sections);
-		if (writefile(temporary, data) != length(data) || !chmod(temporary, 0600)) { unlink(temporary); fail('Cannot stage migration'); }
-		if (!rename(temporary, path)) { unlink(temporary); fail('Cannot publish migration'); }
+		let copies = [], complete = true;
+		try {
+			if (sanitize) {
+				for (let i = 0; i < length(migrated.sections); i++) {
+					let s = migrated.sections[i];
+					if (s['.type'] != 'rule' || s.mode != 'blacklist' || s.blacklist_type == 'ptr') continue;
+					let source = rule_path(s.rule_file, 'rule-' + s['.name'] + '.txt'), content = readfile(source);
+					if (content == null) {
+						complete = false;
+						push(migrated.warnings, 'Blacklist reference preserved; file missing or unreadable: ' + source);
+						continue;
+					}
+					let native = popen('/usr/bin/mosdns sanitize-domain-set --file ' + shell_quote(source) + ' 2>/dev/null', 'r');
+					if (!native) die('Cannot start native blacklist sanitizer: ' + source);
+					let output = native.read('all'), status = native.close();
+					if (status != 0) die('Native blacklist sanitizer failed: ' + source);
+					let sanitized = json(output);
+					if (type(sanitized) != 'object' || type(sanitized.content) != 'string' || type(sanitized.count) != 'int' ||
+						sanitized.count < 0 || sanitized.count > length(split(content, '\n')) ||
+						length(sanitized.content) != length(content) + sanitized.count * length('# mosdns v2 migration: unsupported domain_set line: ') ||
+						readfile(source) !== content || (!sanitized.count && sanitized.content !== content)) die('Invalid native blacklist sanitizer result: ' + source);
+					if (!sanitized.count) continue;
+					let root = '/etc/mosdns/rule/', p = popen('mktemp -d ' + root + '.migrate-XXXXXX', 'r');
+					if (!p) die('Cannot create blacklist migration directory');
+					let directory = replace(p.read('all') || '', /\s+$/, ''), code = p.close();
+					if (code != 0 || index(directory, root + '.migrate-') != 0 || !match(substr(directory, length(root)), /^\.migrate-[A-Za-z0-9]+$/)) die('Cannot create blacklist migration directory');
+					let staged = directory + '/content.new', target = directory + '/content.txt';
+					push(copies, { directory: directory, staged: staged, target: target });
+					if (writefile(staged, sanitized.content) != length(sanitized.content) || readfile(staged) !== sanitized.content ||
+						!chmod(staged, 0644) || !chmod(directory, 0755) || !rename(staged, target)) die('Cannot publish migrated blacklist: ' + source);
+					s.rule_file = target;
+					migrated.changed = true;
+					push(migrated.warnings, 'Commented ' + sanitized.count + ' unsupported domain_set lines from ' + source + '; migrated copy: ' + target);
+				}
+			}
+			if (sanitize && complete) {
+				for (let i = 0; i < length(migrated.sections); i++)
+					if (migrated.sections[i]['.type'] == 'mosdns' && migrated.sections[i]['.name'] == 'config') migrated.sections[i].blacklist_migration_version = '1';
+				migrated.changed = true;
+			}
+			if (migrated.changed) {
+				let data = serialize(migrated.sections);
+				if (writefile(temporary, data) != length(data) || readfile(temporary) !== data || !chmod(temporary, 0600)) die('Cannot stage migration');
+				if (!rename(temporary, path)) die('Cannot publish migration');
+			}
+		} catch (e) {
+			unlink(temporary);
+			for (let i = 0; i < length(copies); i++) {
+				unlink(copies[i].staged);
+				unlink(copies[i].target);
+				rmdir(copies[i].directory);
+			}
+			die(e.message || '' + e);
+		}
 		for (let i = 0; i < length(migrated.warnings); i++) stderr.write('mosdns v2: ' + migrated.warnings[i] + '\n');
-		stderr.write('mosdns v2: migrated configuration; original backup: ' + backup + '; rule files untouched\n');
+		stderr.write('mosdns v2: migrated configuration; original backup: ' + backup + '; original rule files untouched\n');
 		exit(0);
 	}
 	let default_dns = [];

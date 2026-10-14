@@ -13,7 +13,7 @@ const serviceStatus = rpc.declare({object:'service', method:'list', params:['nam
 
 return baseclass.extend({
 	render: function(map) {
-		const status = E('p', {'role':'status', 'aria-live':'polite'}, _('Checking service status…'));
+		const status = E('p', {'class':'mosdns-v2-status', 'role':'status', 'aria-live':'polite'}, _('Checking service status…'));
 		const update = function() {
 			return Promise.all([applyStatus(), serviceStatus('mosdns')]).then(function(result) {
 				const instances = ((result[1].mosdns || {}).instances || {});
@@ -24,8 +24,8 @@ return baseclass.extend({
 					 state.success === false ? _('Last apply failed: ') + (state.error || _('Unknown error')) :
 					 state.phase === 'validating' ? _('Applying configuration…') :
 					 state.success === true ? _('Last apply succeeded.') : _('No apply result recorded.'));
-				status.className = state.success === false && state.phase !== 'unknown' ? 'alert-message error' : '';
-			}).catch(function(error) { status.textContent = _('Unable to check apply status: ') + error.message; status.className = 'alert-message warning'; });
+				status.className = 'mosdns-v2-status' + (state.success === false && state.phase !== 'unknown' ? ' alert-message error' : '');
+			}).catch(function(error) { status.textContent = _('Unable to check apply status: ') + error.message; status.className = 'mosdns-v2-status alert-message warning'; });
 		};
 		return map.render().then(function(node) { poll.add(update); update(); return E('div', {'class':'mosdns-v2'}, [E('link', {rel:'stylesheet', href:L.resource('mosdns/v2.css')}), status, node]); });
 	},
@@ -42,13 +42,23 @@ return baseclass.extend({
 			// No widget nodes or private event handlers are touched.
 			option.keylist = [];
 			option.vallist = [];
-			uci.sections('mosdns', 'dns_group').forEach(function(g) {
+			const groups = uci.sections('mosdns', 'dns_group');
+			const names = groups.map(function(g) { return g.name || g['.name']; });
+			groups.forEach(function(g, i) {
 				const id = g['.name'];
-				option.value(id, !idsOnly && g.name ? g.name + ' (' + id + ')' : id);
+				const label = names[i];
+				const duplicate = names.indexOf(label) !== names.lastIndexOf(label);
+				option.value(id, idsOnly ? id : duplicate && g.name ? label + ' (' + id + ')' : label);
 			});
 		}
 		choices();
 		option.load = function(sid) { choices(); return form.ListValue.prototype.load.call(this, sid); };
+		option.textvalue = function(sid) {
+			choices();
+			const id = this.cfgvalue(sid);
+			const index = this.keylist.indexOf(id);
+			return id ? E('span', {}, index < 0 ? id : this.vallist[index]) : null;
+		};
 		option.validate = function(sid, value) {
 			return uci.get('mosdns', value, '.type') === 'dns_group' ? true : _('Select an existing DNS group.');
 		};

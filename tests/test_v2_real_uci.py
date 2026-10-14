@@ -8,6 +8,7 @@ import tempfile
 import unittest
 
 from test_v2 import HERE, UCODE, invoke
+from test_v2_cli import mock_native_sanitizer
 
 MODULE = os.environ.get('UCI_MODULE_DIR')
 CLI = HERE.parent / 'luci-app-mosdns/root/usr/share/mosdns/v2.uc'
@@ -23,15 +24,19 @@ class RealUciTests(unittest.TestCase):
         return json.loads(result)
 
     def cli_program(self, directory):
-        # Path relocation only: all UCI parsing and filesystem operations are real.
         source = CLI.read_text()
         source = source.replace('cursor()', 'cursor(' + json.dumps(str(directory)) + ', ' + json.dumps(str(directory / 'delta')) + ', "")')
         source = source.replace("'/etc/config/mosdns'", json.dumps(str(directory / 'mosdns')))
         source = source.replace("'/etc/mosdns/rule/streaming.txt'", json.dumps(str(directory / 'streaming.txt')))
+        rules = directory / 'rules'
+        rules.mkdir(exist_ok=True)
+        (rules / 'blocklist.txt').write_text('')
+        source = source.replace("'/etc/mosdns/rule/'", json.dumps(str(rules) + '/'))
+        source = mock_native_sanitizer(source)
         program = directory / 'v2.uc'
         program.write_text(source)
         for name in ['v2-config.uc', 'v2-migrate.uc']:
-            (directory / name).write_text((CLI.parent / name).read_text())
+            (directory / name).write_text((CLI.parent / name).read_text().replace('/etc/mosdns/rule/', str(rules) + '/'))
         return program
 
     def run_migration(self, program):

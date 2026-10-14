@@ -2,7 +2,6 @@
 
 import { values } from './v2-config.uc';
 
-// Return a new section list. Never delete, replace, move or truncate rule files.
 export function migrate(sections, legacy) {
 	legacy = legacy || {};
 	let result = [], config = null, groups = [], rules = [], changed = false, names = {}, warnings = [];
@@ -31,24 +30,24 @@ export function migrate(sections, legacy) {
 		let global = add('dns_group', 'dns_global', { name: '国外', is_default: '1', use_default_dns: '0', dns: values(config.remote_dns || 'tls://8.8.8.8') });
 		// Existing user rules remain byte-for-byte in value and relative order.
 		if (!length(rules)) {
-			add('rule', 'rule_adblock', { name: '广告过滤', enabled: config.adblock || '0', mode: 'builtin', builtin_type: 'adblock', ad_source: values(config.ad_source || 'geosite.dat') });
 			add('rule', 'rule_hosts', { name: 'Hosts', enabled: '1', mode: 'hosts', rule_file: '/etc/mosdns/rule/hosts.txt' });
 			add('rule', 'rule_redirect', { name: '重定向', enabled: '1', mode: 'redirect', rule_file: '/etc/mosdns/rule/redirect.txt' });
-			add('rule', 'rule_ptr', { name: 'PTR 黑名单', enabled: '1', mode: 'blacklist', blacklist_type: 'ptr', rule_file: '/etc/mosdns/rule/local-ptr.txt' });
-			add('rule', 'rule_blocklist', { name: '黑名单', enabled: '1', mode: 'blacklist', blacklist_type: 'domain', rule_file: '/etc/mosdns/rule/blocklist.txt' });
+			add('rule', 'rule_apple', { name: 'Apple 域名优化', enabled: config.apple_optimization || '0', mode: 'builtin', builtin_type: 'apple_domain', dns_group: cn, ip_strategy: 'auto' });
 			function route(id, label, file, group, strategy, ttl) {
 				add('rule', id, { name: label, enabled: '1', mode: 'custom', rule_file: file, dns_group: group, ip_strategy: strategy, ttl: ttl || '0' });
 			}
 			route('rule_ddns', 'DDNS 域名', '/etc/mosdns/rule/ddnslist.txt', cn, 'auto', '5');
+			route('rule_whitelist', '白名单', '/etc/mosdns/rule/whitelist.txt', cn, cn_strategy, '0');
+			add('rule', 'rule_blocklist', { name: '黑名单', enabled: '1', mode: 'blacklist', blacklist_type: 'domain', rule_file: '/etc/mosdns/rule/blocklist.txt' });
+			add('rule', 'rule_adblock', { name: '广告过滤', enabled: config.adblock || '0', mode: 'builtin', builtin_type: 'adblock', ad_source: values(config.ad_source || 'geosite.dat') });
+			add('rule', 'rule_ptr', { name: 'PTR 黑名单', enabled: '1', mode: 'blacklist', blacklist_type: 'ptr', rule_file: '/etc/mosdns/rule/local-ptr.txt' });
+			route('rule_greylist', '灰名单', '/etc/mosdns/rule/greylist.txt', global, global_strategy, '0');
 			if (config.custom_stream_media_dns == '1' || legacy.streaming_rules) {
 				let stream = add('dns_group', 'dns_stream', { name: '流媒体', is_default: '0', use_default_dns: '0', dns: values(config.stream_media_dns || 'tls://8.8.8.8') });
 				if (config.custom_stream_media_dns == '1')
 					add('rule', 'rule_stream', { name: '流媒体', enabled: '1', mode: 'builtin', builtin_type: 'stream_media', dns_group: stream, ip_strategy: global_strategy });
 				else route('rule_stream', '流媒体（迁移）', '/etc/mosdns/rule/streaming.txt', stream, global_strategy, '0');
 			}
-			add('rule', 'rule_apple', { name: 'Apple 域名优化', enabled: config.apple_optimization || '0', mode: 'builtin', builtin_type: 'apple_domain', dns_group: cn, ip_strategy: 'auto' });
-			route('rule_greylist', '灰名单', '/etc/mosdns/rule/greylist.txt', global, global_strategy, '0');
-			route('rule_whitelist', '白名单', '/etc/mosdns/rule/whitelist.txt', cn, cn_strategy, '0');
 			add('rule', 'rule_cn', { name: '国内域名', enabled: '1', mode: 'builtin', builtin_type: 'cn_domain', dns_group: cn, ip_strategy: cn_strategy });
 			add('rule', 'rule_global', { name: '国外域名', enabled: '1', mode: 'builtin', builtin_type: 'noncn_domain', dns_group: global, ip_strategy: global_strategy });
 		}

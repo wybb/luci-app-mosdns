@@ -87,6 +87,10 @@ def map_response(config, address, sets):
 
 
 class V2Tests(unittest.TestCase):
+    def setUp(self):
+        if not UCODE:
+            self.skipTest('ucode unavailable: set UCODE_BIN to run native tests')
+
     def test_cache_first_optional_stats_prefetch_and_no_legacy_activation(self):
         data = sections()
         data[0].update(minimal_ttl='9', maximum_ttl='99', enable_ecs_remote='1', reject_type65='1', dns_leak='1')
@@ -230,6 +234,33 @@ class V2Tests(unittest.TestCase):
         self.assertEqual(custom['mode'], 'custom')
         self.assertEqual(custom['rule_file'], '/etc/mosdns/rule/streaming.txt')
 
+    def test_upstream_migration_preserves_legacy_routing_priority(self):
+        data = parse_uci((HERE / 'test_v2_upstream.conf').read_text())
+        data[0].update(adblock='1', apple_optimization='1', custom_stream_media_dns='1')
+        result = invoke('migrate', data)
+        expected = ['rule_hosts', 'rule_redirect', 'rule_apple', 'rule_ddns', 'rule_whitelist',
+                    'rule_blocklist', 'rule_adblock', 'rule_ptr', 'rule_greylist', 'rule_stream',
+                    'rule_cn', 'rule_global']
+        self.assertEqual([s['.name'] for s in result['sections'] if s['.type'] == 'rule'], expected)
+        compiled = plugins(invoke('generate', result['sections'], ['223.5.5.5']))
+        executions = [r['exec'] for r in compiled['main_sequence']['args']]
+        positions = [executions.index(('jump ' if sid == 'rule_redirect' else '$') + 'rule_exec_' + sid)
+                     for sid in expected]
+        self.assertEqual(positions, sorted(positions))
+        self.assertEqual(compiled['rule_set_rule_blocklist']['type'], 'domain_set')
+        self.assertFalse(invoke('migrate', result['sections'])['changed'])
+
+    def test_existing_legacy_and_v2_rule_order_is_not_rebuilt(self):
+        for schema in [None, '2']:
+            data = sections()
+            if schema:
+                data[0]['schema_version'] = schema
+            original = [{'.type': 'rule', '.name': 'last_first', 'mode': 'blacklist', 'rule_file': 'own.txt'},
+                        {'.type': 'rule', '.name': 'first_last', 'mode': 'hosts', 'rule_file': 'shared.txt'}]
+            result = invoke('migrate', data + original)
+            self.assertEqual([s for s in result['sections'] if s['.type'] == 'rule'], original)
+            self.assertFalse(invoke('migrate', result['sections'])['changed'])
+
     def test_legacy_mapping_conversion_preserves_existing_mappings(self):
         data = sections()
         data[0].update(schema_version='2', response_ip_map='1', response_ip_map_file='old.txt', response_ip_map_target=['1.2.3.4'])
@@ -251,6 +282,49 @@ class V2Tests(unittest.TestCase):
         generated = plugins(invoke('generate', result['sections'], ['223.5.5.5']))
         self.assertIn('stats_collector', generated)
         self.assertTrue(generated['lazy_cache']['args']['prefetch'])
+
+
+class NodeMigrationShimTests(unittest.TestCase):
+    def test_migration_order_with_js_shims_not_native_validation(self):
+        node = os.environ.get('NODE_BIN') or shutil.which('node')
+        if not node:
+            self.skipTest('Node unavailable for explicitly non-native migration shim test')
+        script = r'''
+const fs = require('fs'), vm = require('vm'), assert = require('assert');
+const root = process.argv[1];
+const helpers = {
+    type: v => Array.isArray(v) ? 'array' : v == null ? null : typeof v,
+    length: v => v == null ? 0 : v.length,
+    split: (v, s) => v.split(s), replace: (v, r, s) => v.replace(r, s),
+    index: (v, s) => v.indexOf(s), match: (v, r) => r.exec(v),
+    substr: (v, i, n) => v.substr(i, n), join: (s, a) => a.join(s),
+    push: (a, ...v) => a.push(...v), filter: (a, f) => a.filter(f), keys: Object.keys,
+    die: s => { throw Error(s); }
+};
+const code = ['v2-config.uc', 'v2-migrate.uc'].map(name =>
+    fs.readFileSync(root + '/' + name, 'utf8').replace(/^import .*$/mg, '').replace(/export /g, '')).join('\n');
+const core = vm.runInNewContext('(function(){' + code + ';return {migrate,generate};})()', helpers);
+const input = [{'.type':'mosdns','.name':'config',adblock:'1',apple_optimization:'1',custom_stream_media_dns:'1'}];
+const migrated = core.migrate(input);
+const expected = ['rule_hosts','rule_redirect','rule_apple','rule_ddns','rule_whitelist','rule_blocklist',
+    'rule_adblock','rule_ptr','rule_greylist','rule_stream','rule_cn','rule_global'];
+assert.equal(JSON.stringify(migrated.sections.filter(s => s['.type'] === 'rule').map(s => s['.name'])), JSON.stringify(expected));
+assert.equal(core.migrate(migrated.sections).changed, false);
+const config = core.generate(migrated.sections, ['223.5.5.5']);
+assert.equal(config.plugins.find(p => p.tag === 'rule_set_rule_blocklist').type, 'domain_set');
+for (const schema of [null, '2']) {
+    const original = [{'.type':'mosdns','.name':'config',schema_version:schema},
+        {'.type':'dns_group','.name':'main',is_default:'1',dns:['8.8.8.8']},
+        {'.type':'rule','.name':'z',mode:'blacklist',rule_file:'own.txt'},
+        {'.type':'rule','.name':'a',mode:'hosts',rule_file:'own.txt'}];
+    assert.equal(JSON.stringify(core.migrate(original).sections.slice(2)), JSON.stringify(original.slice(2)));
+}
+console.log('PASS: Node migration shims; no native ucode/libuci or Go regexp validation claimed');
+'''
+        result = subprocess.run([node, '-e', script, str(HERE.parent / 'luci-app-mosdns/root/usr/share/mosdns')],
+                                text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('PASS: Node migration shims', result.stdout)
 
 
 if __name__ == '__main__':
