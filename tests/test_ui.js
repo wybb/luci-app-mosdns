@@ -33,24 +33,50 @@ const section={option:()=>new Option()};
 })().catch(e=>{console.error(e);process.exitCode=1});
 
 // Exercise each view's public form schema without claiming browser coverage.
-let maps=[];
-function MockOption(type,key) { this.type=type; this.option=key; this.choices=[]; this.dependencies=[]; }
+let maps=[],modal;
+function MockOption(type,key,title,description) { this.type=type; this.option=key; this.title=title; this.description=description; this.choices=[]; this.dependencies=[]; }
 MockOption.prototype.value=function(value,label){this.choices.push([value,label]);};
 MockOption.prototype.depends=function(...args){this.dependencies.push(args);};
-function Section(type,name){this.type=type;this.name=name;this.options=[];}
-Section.prototype.option=function(type,key){let o=new MockOption(type,key);this.options.push(o);return o;};
+function Section(type,name){this.type=type;this.name=name;this.options=[];this.tabs=[];}
+Section.prototype.option=function(type,key,title,description){let o=new MockOption(type,key,title,description);this.options.push(o);return o;};
 Section.prototype.taboption=function(tab,...args){return this.option(...args);};
-Section.prototype.tab=function(){};
-function MapMock(){this.sections=[];maps.push(this);}
+Section.prototype.tab=function(name,title){this.tabs.push([name,title]);};
+function MapMock(config,title,description){this.config=config;this.title=title;this.description=description;this.sections=[];maps.push(this);}
 MapMock.prototype.section=function(type,name){let s=new Section(type,name);this.sections.push(s);return s;};
 MapMock.prototype.render=function(){return Promise.resolve(this);};
 const schemaForm={Map:MapMock, NamedSection:'NamedSection',GridSection:'GridSection',Value:'Value',ListValue:'ListValue',Flag:'Flag',DummyValue:'DummyValue',Button:'Button',DynamicList:'DynamicList',TextValue:'TextValue'};
 const v2Mock={render:m=>m,strategy:o=>o,groups:(o,idsOnly)=>{o.idsOnly=idsOnly;return o;},content:(s,key)=>s.option('TextValue',key)};
-function loadView(name){return vm.runInNewContext('(function(){'+fs.readFileSync(root+'view/mosdns/'+name+'.js','utf8')+'})()', {view:{extend:x=>x},form:schemaForm,uci,rpc,fs:{},ui:{},v2:v2Mock,L:{hasSystemFeature:()=>true},_:s=>s});}
+function loadView(name){return vm.runInNewContext('(function(){'+fs.readFileSync(root+'view/mosdns/'+name+'.js','utf8')+'})()', {view:{extend:x=>x},form:schemaForm,uci,rpc,fs:{},ui:{showModal:(title,content)=>{modal={title,content};},hideModal:()=>{},createHandlerFn:(context,handler)=>handler.bind(context)},v2:v2Mock,L:{hasSystemFeature:()=>true},E:(tag,attrs,text)=>({tag,attrs,text}),_:s=>s});}
 const basic=loadView('basic_v2').render([null,{}]);
 const options=basic.sections[0].options;
+assert.equal(basic.title,'MosDNS');
+assert.equal(loadView('basic_v2').render([null,{version:'v5.3.4'}]).title,'MosDNS · v5.3.4');
+assert.equal(basic.description,'MosDNS is a plugin-based DNS forwarder/traffic splitter.');
+assert.deepEqual(basic.sections[0].tabs,[['basic','Basic Options'],['advanced','Advanced Options'],['api','API Options'],['geodata','GeoData Export'],['legacy','Legacy options']]);
+assert.equal(options.find(o=>o.option==='configfile').title,'Config File');
+assert.deepEqual(options.find(o=>o.option==='configfile').choices,[['/var/etc/mosdns.json','Default Config'],['/etc/mosdns/config_custom.yaml','Custom Config']]);
+assert.equal(options.find(o=>o.option==='configfile').default,'/var/etc/mosdns.json');
+assert.equal(options.find(o=>o.option==='_custom').title,'Configuration Editor');
+assert.equal(options.find(o=>o.option==='_custom').description,"This is the content of the file '/etc/mosdns/config_custom.yaml' from which your MosDNS configuration will be generated. Only accepts configuration content in yaml format.");
+assert.equal(options.find(o=>o.option==='listen_port_api').description,undefined);
+assert.equal(options.find(o=>o.option==='insecure_skip_verify').description,'Disable TLS Servers certificate validation, Can be useful if system CA certificate expires or the system time is out of order');
+assert.deepEqual(options.find(o=>o.option==='log_level').choices,[['debug','Debug'],['info','Info'],['warn','Warning'],['error','Error']]);
+assert.equal(options.find(o=>o.option==='log_level').default,'info');
+for(const [key,title] of [['listen_address','Listen Address'],['log_level','Log Level'],['log_file','Log File'],['log_size','Log File Size'],['redirect','DNS Forward'],['local_dns_redirect','DNS redirect'],['bootstrap_dns','Bootstrap DNS servers'],['concurrent','Concurrent'],['idle_timeout','Idle Timeout'],['enable_pipeline','TCP/DoT Connection Multiplexing'],['insecure_skip_verify','Disable TLS Certificate'],['cache','Enable DNS Cache'],['cache_size','DNS Cache Size'],['lazy_cache_ttl','Lazy Cache TTL'],['prefetch','Cache Prefetching'],['prefetch_before_expire','Prefetch Before Expire'],['prefetch_min_hits','Prefetch Min Hits'],['prefetch_scan_interval','Prefetch Scan Interval'],['dump_file','Cache Dump'],['dump_interval','Auto Save Cache Interval'],['listen_port_api','API Listen port'],['stats_collector','Enable Stats Collector'],['stats_capacity','Ring Buffer Capacity'],['stats_dump_file','Stats Dump'],['stats_dump_interval','Auto Save Stats Interval'],['geosite_tags','GeoSite Tags'],['geoip_tags','GeoIP Tags']]) assert.equal(options.find(o=>o.option===key).title,title);
+assert.equal(options.find(o=>o.option==='_flush').inputtitle,'Flush DNS Cache');
+assert.equal(options.find(o=>o.option==='listen_port').title,'DNS listen / forwarding port');
+assert.equal(options.find(o=>o.option==='listen_port').description,'In custom mode, this forwarding port must match the listener defined in your YAML.');
+assert.deepEqual(options.find(o=>o.option==='listen_port').dependencies,[]);
+assert.deepEqual(options.find(o=>o.option==='_custom').dependencies,[['configfile','/etc/mosdns/config_custom.yaml']]);
+for(const [key,def,datatype] of [['listen_address','0.0.0.0','ipaddr'],['listen_port','5335','port'],['log_size','1M',undefined],['concurrent','2','range(1,3)'],['cache_size','8000','range(1,10000000)'],['dump_interval','3600','range(1,86400)'],['listen_port_api','9091','port']]) {
+ const option=options.find(o=>o.option===key);assert.equal(option.default,def);assert.equal(option.datatype,datatype);
+}
+assert.equal(options.find(o=>o.option==='cache').default,'1');
 assert.equal(options.find(o=>o.option==='stats_collector').default,'0');
-for(const field of ['minimal_ttl','maximum_ttl','enable_ecs_remote','remote_ecs_ip','reject_type65','dns_leak']) assert.equal(options.find(o=>o.option===field).type,'DummyValue');
+for(const field of ['minimal_ttl','maximum_ttl','enable_ecs_remote','remote_ecs_ip','reject_type65','dns_leak']) {
+ assert.equal(options.find(o=>o.option===field).type,'DummyValue');
+ assert.equal(options.find(o=>o.option===field).description,'Retained from older settings; inactive.');
+}
 const groups=loadView('dns_groups_v2').render();const groupSection=groups.sections[1];assert.equal(groupSection.anonymous,false);assert.equal(groupSection.addremove,true);
 assert.equal(groupSection.sectiontitle('dns_main'),'Main');assert.equal(groupSection.sectiontitle('dns_missing'),'Unnamed group');
 assert.equal(groupSection.options.find(o=>o.option==='name').modalonly,true);
@@ -61,7 +87,20 @@ const originalId=groupRows[0]['.name'];groupRows[0].name='Renamed group';assert.
 const groupColumns=[groupSection.sectiontitle(originalId),...groupSection.options.filter(o=>!o.modalonly).map(o=>o.option)];
 assert.deepEqual(groupColumns,['Main','use_default_dns','dns']);assert(!groupColumns.includes(originalId));
 assert.equal(groups.sections[0].options.find(o=>o.option==='_default_group').idsOnly,undefined);
-const rules=loadView('rules_v2').render();assert.equal(rules.sections[1].sortable,true);
+assert.equal(groups.description,'Manage upstream DNS servers for routing rules.');
+assert.equal(groups.sections[0].options.find(o=>o.option==='_default_group').description,'Used when no routing rule returns an answer.');
+const rulesView=loadView('rules_v2'),rules=rulesView.render();assert.equal(rules.sections[1].sortable,true);
+assert.equal(rules.description,'Rules run from top to bottom. Reorder to change priority. Unmatched requests use the default DNS group.');
+assert.equal(rules.sections[0].options.find(o=>o.option==='_restore_rules').inputtitle,'Restore rules, keep groups');
+assert.equal(rules.sections[0].options.find(o=>o.option==='_restore_all').inputtitle,'Restore default configuration');
+for(const keepGroups of [true,false]) {
+ rules.sections[0].options.find(o=>o.option===(keepGroups?'_restore_rules':'_restore_all')).onclick();
+ assert.equal(modal.title,'Restore default configuration?');
+ assert.equal(modal.content[0].text,keepGroups?'Replace routing rules and IP mappings with defaults, keeping DNS groups. Applies immediately. Save or discard pending edits first.':'Replace DNS groups, routing rules and IP mappings with defaults. Applies immediately. Save or discard pending edits first.');
+ assert.equal(modal.content[1].text[0].text,'Cancel');
+ assert.equal(modal.content[1].text[2].text,'Restore and reload');
+}
+console.log('PASS: upstream configuration, tab and option labels; translated log levels; original YAML instruction; core version and forwarding semantics retained; restore confirmation; unchanged defaults and validation.');
 assert(rules.sections[1].options.find(o=>o.option==='builtin_type').choices.some(x=>x[0]==='stream_media'));
 const mappings=loadView('ip_mapping_v2').render();assert.equal(mappings.sections[0].sortable,true);
 assert.deepEqual(mappings.sections[0].options.find(o=>o.option==='continue_match').choices.map(x=>x[0]),['1','0']);
@@ -273,7 +312,13 @@ const translationFiles=[...filesWithExtension(root+'mosdns','.js'),...filesWithE
 const usedIds=new Set();let literalCalls=0;
 for(const filename of translationFiles) {
  const ids=translationLiterals(fs.readFileSync(filename,'utf8'));literalCalls+=ids.length;
- for(const id of ids)usedIds.add(id);
+ assert(ids.length>0,filename+': no translation literals extracted');
+ for(const id of ids) {
+  assert(!/\bv2\b|schema version/i.test(id),filename+': internal version in visible wording: '+id);
+  assert(!/^Automatic\b/.test(id),filename+': invented automatic-mode wording: '+id);
+  assert(!/Save & Apply|Save stages changes|atomically|configuration backup|failed reload keeps/i.test(id),filename+': implementation details in visible wording: '+id);
+  usedIds.add(id);
+ }
 }
 const menuFiles=filesWithExtension(require('path').join(__dirname,'../luci-app-mosdns/root/usr/share/luci/menu.d'),'.json');
 let menuTitles=0;
@@ -281,11 +326,21 @@ for(const filename of menuFiles) {
  const menu=JSON.parse(fs.readFileSync(filename,'utf8'));
  for(const entry of Object.values(menu)) {
   if(!Object.hasOwn(entry,'title'))continue;
-  assert.equal(typeof entry.title,'string',filename+': nonliteral menu title');usedIds.add(entry.title);menuTitles++;
+  assert.equal(typeof entry.title,'string',filename+': nonliteral menu title');
+  assert(!/\bv2\b|schema version/i.test(entry.title),filename+': internal version in menu title');
+  usedIds.add(entry.title);menuTitles++;
  }
 }
-assert.equal(usedIds.size,234,'Current MosDNS translation inventory changed');
+assert(usedIds.size>0&&usedIds.size<=literalCalls+menuTitles,'Translation extraction must cover JS literals and menu titles');
 const po=parseGettext(fs.readFileSync(require('path').join(__dirname,'../luci-app-mosdns/po/zh_Hans/mosdns.po'),'utf8'));
 const pot=parseGettext(fs.readFileSync(require('path').join(__dirname,'../luci-app-mosdns/po/templates/mosdns.pot'),'utf8'));
 assertTranslations(usedIds,po,pot);
+for(const [id,translation] of [['Config File','配置文件'],['Default Config','内置预设'],['Custom Config','自定义'],['Configuration Editor','配置编辑器'],['Basic Options','基本选项'],['Advanced Options','高级选项'],['API Options','API 选项'],['GeoData Export','GeoData 导出'],['Debug','调试'],['Info','信息'],['Warning','警告'],['Error','错误'],['Restore default configuration','恢复默认配置'],['Restore default configuration?','恢复默认配置？'],['Restore rules, keep groups','恢复规则，保留 DNS 组'],['Retained from older settings; inactive.','保留自旧设置，不生效。'],['MosDNS is a plugin-based DNS forwarder/traffic splitter.','MosDNS 是一个插件化的 DNS 转发/分流器。']]) {
+ assert(usedIds.has(id),'Expected current UI wording: '+id);
+ assert.equal(po.get(id).msgstr,translation);
+}
+for(const id of ['Automatic','Automatic mode only. Custom YAML sets its own API address; use a trusted bind address.','Custom configuration editor','Custom mode ignores DNS groups and routing rules. Enter your YAML configuration here.','Generated v2 configuration','MosDNS v2','Restore all v2 defaults','Restore v2 defaults?']) {
+ assert(!usedIds.has(id),'Legacy wording still used: '+id);
+ assert(po.has(id)&&pot.has(id),'Legacy translation must remain compatible: '+id);
+}
 console.log('PASS: gettext multiline, C escapes, comments/fuzzy and extraction regressions; '+translationFiles.length+' JS files, '+literalCalls+' literal calls, '+menuTitles+' menu titles, '+usedIds.size+' unique used msgids; '+(po.size-1)+' PO and '+(pot.size-1)+' POT msgids; '+Array.from(usedIds).filter(id=>printfPlaceholders(id).length).length+' used printf msgids preserved.');

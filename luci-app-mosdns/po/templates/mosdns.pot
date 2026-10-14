@@ -1675,3 +1675,39 @@ msgstr ""
 #: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:45
 msgid "geosite.dat or a supported HTTPS domain-list URL."
 msgstr ""
+
+msgid "Automatic"
+msgstr ""
+
+msgid "Custom configuration editor"
+msgstr ""
+
+msgid "Custom mode ignores DNS groups and routing rules. Enter your YAML configuration here."
+msgstr ""
+
+msgid "Automatic mode only. Custom YAML sets its own API address; use a trusted bind address."
+msgstr ""
+
+msgid "Retained from older settings; inactive."
+msgstr ""
+
+msgid "Manage upstream DNS servers for routing rules."
+msgstr ""
+
+msgid "Used when no routing rule returns an answer."
+msgstr ""
+
+msgid "Restore default configuration?"
+msgstr ""
+
+msgid "Restore default configuration"
+msgstr ""
+
+msgid "Replace routing rules and IP mappings with defaults, keeping DNS groups. Applies immediately. Save or discard pending edits first."
+msgstr ""
+
+msgid "Replace DNS groups, routing rules and IP mappings with defaults. Applies immediately. Save or discard pending edits first."
+msgstr ""
+
+msgid "Rules run from top to bottom. Reorder to change priority. Unmatched requests use the default DNS group."
+msgstr ""

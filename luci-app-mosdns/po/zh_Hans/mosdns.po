@@ -1715,3 +1715,39 @@ msgstr "没有路由规则返回应答时使用此组。重命名组不会改变
 #: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/rules_v2.js:45
 msgid "geosite.dat or a supported HTTPS domain-list URL."
 msgstr "geosite.dat 或受支持的 HTTPS 域名列表 URL。"
+
+msgid "Automatic"
+msgstr "自动"
+
+msgid "Custom configuration editor"
+msgstr "自定义配置编辑器"
+
+msgid "Custom mode ignores DNS groups and routing rules. Enter your YAML configuration here."
+msgstr "自定义模式不使用 DNS 组和路由规则，请在此填写 YAML 配置。"
+
+msgid "Automatic mode only. Custom YAML sets its own API address; use a trusted bind address."
+msgstr "仅适用于自动模式。自定义 YAML 自行设置 API 地址，请使用可信的监听地址。"
+
+msgid "Retained from older settings; inactive."
+msgstr "保留自旧设置，不生效。"
+
+msgid "Manage upstream DNS servers for routing rules."
+msgstr "管理路由规则使用的上游 DNS 服务器。"
+
+msgid "Used when no routing rule returns an answer."
+msgstr "没有路由规则返回应答时使用此组。"
+
+msgid "Restore default configuration?"
+msgstr "恢复默认配置？"
+
+msgid "Restore default configuration"
+msgstr "恢复默认配置"
+
+msgid "Replace routing rules and IP mappings with defaults, keeping DNS groups. Applies immediately. Save or discard pending edits first."
+msgstr "将路由规则和 IP 映射替换为默认配置，保留 DNS 组，并立即应用。请先保存或放弃未保存的编辑。"
+
+msgid "Replace DNS groups, routing rules and IP mappings with defaults. Applies immediately. Save or discard pending edits first."
+msgstr "将 DNS 组、路由规则和 IP 映射替换为默认配置，并立即应用。请先保存或放弃未保存的编辑。"
+
+msgid "Rules run from top to bottom. Reorder to change priority. Unmatched requests use the default DNS group."
+msgstr "规则从上到下执行，可调整顺序改变优先级。未匹配的请求使用默认 DNS 组。"

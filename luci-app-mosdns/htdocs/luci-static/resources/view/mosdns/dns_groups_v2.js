@@ -8,9 +8,9 @@
 return view.extend({
 	load: function() { return uci.load('mosdns'); },
 	render: function() {
-		const m = new form.Map('mosdns', _('DNS groups'), _('Renaming groups preserves rule references. Save & Apply validates and reloads MosDNS.'));
+		const m = new form.Map('mosdns', _('DNS groups'), _('Manage upstream DNS servers for routing rules.'));
 		let s = m.section(form.NamedSection, 'config', 'mosdns');
-		let o = v2.groups(s.option(form.ListValue, '_default_group', _('Default DNS group'), _('Used when no routing rule returns an answer. Renaming a group does not change its rule references.')));
+		let o = v2.groups(s.option(form.ListValue, '_default_group', _('Default DNS group'), _('Used when no routing rule returns an answer.')));
 		o.cfgvalue = function() { const g = uci.sections('mosdns', 'dns_group').filter(function(g) { return g.is_default === '1'; })[0]; return g && g['.name']; };
 		o.write = function(sid, value) { uci.sections('mosdns', 'dns_group').forEach(function(g) { uci.set('mosdns', g['.name'], 'is_default', g['.name'] === value ? '1' : '0'); }); };
 		s = m.section(form.GridSection, 'dns_group', _('DNS groups'));
@@ -32,7 +32,7 @@ return view.extend({
 		o = s.option(form.Flag, 'use_default_dns', _('Use interface DNS')); o.default = '0'; o.rmempty = false;
 		o = s.option(form.DynamicList, 'dns', _('DNS servers'), _('One upstream per entry: IP, tls://, https://, h3:// or quic://.'));
 		o.depends('use_default_dns', '0'); o.retain = true; o.rmempty = false; o.default = '8.8.8.8';
-		o = s.option(form.Value, 'bootstrap_dns', _('Bootstrap DNS')); o.modalonly = true; o.datatype = 'ipaddr';
+		o = s.option(form.Value, 'bootstrap_dns', _('Bootstrap DNS servers')); o.modalonly = true; o.datatype = 'ipaddr';
 		o = s.option(form.Value, 'concurrent', _('Concurrency'), _('Leave empty to inherit the global setting.'));
 		o.datatype = 'range(1,3)'; o.modalonly = true;
 		return v2.render(m);

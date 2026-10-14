@@ -10,8 +10,8 @@ const restoreDefaults = rpc.declare({object:'luci.mosdns', method:'restore_rule_
 
 return view.extend({
 	restore: function(keepGroups) {
-		ui.showModal(_('Restore v2 defaults?'), [
-			E('p', {}, keepGroups ? _('This replaces the routing rules and IP mappings while keeping DNS groups. A configuration backup is made. Save or discard pending edits before continuing. The service reloads immediately.') : _('This replaces DNS groups, routing rules and IP mappings with v2 defaults. A configuration backup is made. Save or discard pending edits before continuing. The service reloads immediately.')),
+		ui.showModal(_('Restore default configuration?'), [
+			E('p', {}, keepGroups ? _('Replace routing rules and IP mappings with defaults, keeping DNS groups. Applies immediately. Save or discard pending edits first.') : _('Replace DNS groups, routing rules and IP mappings with defaults. Applies immediately. Save or discard pending edits first.')),
 			E('div', {'class':'right'}, [
 				E('button', {'class':'btn', 'click':ui.hideModal}, _('Cancel')),
 				' ', E('button', {'class':'btn cbi-button-negative', 'click':ui.createHandlerFn(this, function() {
@@ -26,13 +26,13 @@ return view.extend({
 	},
 	load: function() { return uci.load('mosdns'); },
 	render: function() {
-		const m = new form.Map('mosdns', _('Routing rules'), _('Rules run from top to bottom. Use the reorder controls to change priority. Unmatched requests use the default DNS group. Rule files are written atomically before configuration is saved.'));
+		const m = new form.Map('mosdns', _('Routing rules'), _('Rules run from top to bottom. Reorder to change priority. Unmatched requests use the default DNS group.'));
 		let s = m.section(form.NamedSection, 'config', 'mosdns', _('Default fallback'));
 		v2.strategy(s.option(form.ListValue, 'fallback_ip_strategy', _('Fallback IP strategy')));
 		let reset = s.option(form.Button, '_restore_rules', _('Restore default rules'));
 		reset.inputtitle = _('Restore rules, keep groups'); reset.onclick = this.restore.bind(this, true);
 		reset = s.option(form.Button, '_restore_all', _('Restore groups and rules'));
-		reset.inputtitle = _('Restore all v2 defaults'); reset.onclick = this.restore.bind(this, false);
+		reset.inputtitle = _('Restore default configuration'); reset.onclick = this.restore.bind(this, false);
 		s = m.section(form.GridSection, 'rule', _('Ordered rules'));
 		s.anonymous = true; s.addremove = true; s.sortable = true; s.nodescriptions = true;
 		let o = s.option(form.Flag, 'enabled', _('Enabled')); o.default = '1'; o.rmempty = false;
